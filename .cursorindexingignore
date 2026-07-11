@@ -1,0 +1,4 @@
+# 不参与语义搜索，但仍可通过 @file 手动引用
+frontend/src/index.css
+**/*.sql
+scripts/

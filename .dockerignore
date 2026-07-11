@@ -1,0 +1,20 @@
+# 构建上下文：仅复制部署所需源码，排除本地产物与敏感数据
+.git
+.idea
+.vscode
+**/.DS_Store
+**/Thumbs.db
+
+backend/target/
+backend/data/
+backend/run.log
+
+frontend/node_modules/
+frontend/dist/
+
+tools/
+*.db
+
+.env
+deploy-export/
+backend/config/application-local.properties

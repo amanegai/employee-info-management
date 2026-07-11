@@ -1,0 +1,14 @@
+ALTER TABLE dispatch_client ADD COLUMN IF NOT EXISTS postal_code TEXT;
+ALTER TABLE dispatch_client ADD COLUMN IF NOT EXISTS address TEXT;
+ALTER TABLE dispatch_client ADD COLUMN IF NOT EXISTS phone TEXT;
+ALTER TABLE dispatch_client ADD COLUMN IF NOT EXISTS fax TEXT;
+ALTER TABLE dispatch_client ADD COLUMN IF NOT EXISTS company_url TEXT;
+ALTER TABLE dispatch_client ADD COLUMN IF NOT EXISTS contract_type TEXT;
+ALTER TABLE dispatch_client ADD COLUMN IF NOT EXISTS contract_renewal_date TEXT;
+ALTER TABLE dispatch_client ADD COLUMN IF NOT EXISTS contract_expiry_date TEXT;
+ALTER TABLE dispatch_client ADD COLUMN IF NOT EXISTS primary_internal_contact TEXT;
+ALTER TABLE dispatch_client ADD COLUMN IF NOT EXISTS invoice_delivery_address TEXT;
+ALTER TABLE dispatch_client ADD COLUMN IF NOT EXISTS accounting_contact TEXT;
+ALTER TABLE dispatch_client ADD COLUMN IF NOT EXISTS corporate_number TEXT;
+ALTER TABLE dispatch_client ADD COLUMN IF NOT EXISTS credit_info TEXT;
+ALTER TABLE dispatch_client ADD COLUMN IF NOT EXISTS credit_limit TEXT;

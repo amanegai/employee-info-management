@@ -1,0 +1,9 @@
+# ローカル SMTP 設定（このファイルは git に含めないことを推奨）
+# 使用例: java -jar employee-management-1.0.0.jar --spring.config.additional-location=file:./config/
+
+app.mail.enabled=true
+app.mail.from=hr@bitcross.co.jp
+spring.mail.host=mail.bitcross.co.jp
+spring.mail.port=587
+spring.mail.username=your-account@bitcross.co.jp
+spring.mail.password=your-password-or-app-password

@@ -1,0 +1,1 @@
+ALTER TABLE dispatch_project ADD COLUMN IF NOT EXISTS headcount_unlimited BOOLEAN NOT NULL DEFAULT FALSE;

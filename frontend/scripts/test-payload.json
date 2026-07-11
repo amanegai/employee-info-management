@@ -1,0 +1,263 @@
+{
+  "employeeCode": "TEST001",
+  "name": "蘇　娟",
+  "departmentId": 1,
+  "position": "社員",
+  "employeeType": "正社員",
+  "workStatus": "稼働中",
+  "unitPrice": 0,
+  "evaluation": "B3",
+  "endDate": null,
+  "personal": {
+    "gender": "女",
+    "birthDate": "1998-01-01",
+    "nationality": "中国",
+    "phone": "",
+    "email": "",
+    "address": "",
+    "education": "",
+    "nearestStation": "三田線：蓮根駅",
+    "photoUrl": "",
+    "furigana": "ソ　ケン",
+    "maritalStatus": "未婚",
+    "itIndustryYears": null,
+    "japanArrivalDate": "2019-11-01",
+    "educationDegree": "大学",
+    "schoolName": "北京体育大学",
+    "major": "応用心理学",
+    "japaneseLevel": "B",
+    "japaneseConversation": "B",
+    "japaneseReading": "◎",
+    "japaneseWriting": "◎",
+    "englishLevel": "D",
+    "englishConversation": "D",
+    "englishReading": "△",
+    "englishWriting": "△",
+    "technicalLevel": "",
+    "specialtyDev": "Java、PHP、HTML、JavaScript",
+    "specialtyBusiness": "人事、物流、求人、教育、交通",
+    "selfPr": "私の強みは、詳細設計から開発、テスト、運用、保守まで一貫して担当することができる幅広いスキルセットと、多様な技術を使いこなす能力です。これまでの経験を通じて、Windows, MySQL, Java,PHP, SQL, HTML, CSS, JavaScript, Spring Boot, Azure, Docker, Ciscoなどの技術を習得し、それらを活用して業務を遂行してきました。また、ユーザーからの問い合わせ対応や障害対応も経験しており、ユーザー視点でのシステム運用も得意としています。今後はこれらの経験を活かし、より大規模なプロジェクトに活躍したいと考えています。"
+  },
+  "skills": [],
+  "technicalSkills": [
+    {
+      "category": "OS",
+      "itemName": "Windows",
+      "level": "◎"
+    },
+    {
+      "category": "OS",
+      "itemName": "Linux",
+      "level": "〇"
+    },
+    {
+      "category": "開発言語",
+      "itemName": "Java",
+      "level": "◎"
+    },
+    {
+      "category": "開発言語",
+      "itemName": "PHP",
+      "level": "◎"
+    },
+    {
+      "category": "DB",
+      "itemName": "Oracle",
+      "level": "〇"
+    },
+    {
+      "category": "DB",
+      "itemName": "SQLServer",
+      "level": "◎"
+    },
+    {
+      "category": "DB",
+      "itemName": "MySQL",
+      "level": "◎"
+    },
+    {
+      "category": "DB",
+      "itemName": "PostgreSQL",
+      "level": "〇"
+    },
+    {
+      "category": "フレームワーク/ソリューション",
+      "itemName": "Struts",
+      "level": "〇"
+    },
+    {
+      "category": "フレームワーク/ソリューション",
+      "itemName": "Spring",
+      "level": "〇"
+    },
+    {
+      "category": "サーバ/モニター",
+      "itemName": "Apache",
+      "level": "〇"
+    },
+    {
+      "category": "サーバ/モニター",
+      "itemName": "Tomcat",
+      "level": "〇"
+    },
+    {
+      "category": "その他",
+      "itemName": "Microsoft Azure",
+      "level": "〇"
+    },
+    {
+      "category": "その他",
+      "itemName": "Office365",
+      "level": "〇"
+    },
+    {
+      "category": "その他",
+      "itemName": "SharePoint",
+      "level": "〇"
+    },
+    {
+      "category": "業務知識",
+      "itemName": "流通・調達",
+      "level": "△"
+    },
+    {
+      "category": "業務知識",
+      "itemName": "サービス業・他",
+      "level": "〇"
+    }
+  ],
+  "qualifications": [
+    {
+      "description": "日本語能力試験1級（N1） 　※2023年取得"
+    }
+  ],
+  "careers": [
+    {
+      "period": "",
+      "organization": "",
+      "roleOverview": "宅配管理システム\r\n【プロジェクト概要】\r\n顧客の荷物の送付、物流管理の日時変更、場所変更、伝票検索等の機能開発\r\n\r\n【担当フェーズ】\r\nバッチ、単体テスト、結合テスト\r\n\r\n【業務内容】\r\n・詳細設計書の改修\r\n・バッチの作成\r\n・テスト仕様書の作成\r\n・テスト実施",
+      "startDate": "2020-02-01",
+      "endDate": "2020-09-01",
+      "months": 8,
+      "workplace": "日本",
+      "role": "PG",
+      "osDb": "Windows/PostgreSQL",
+      "languages": "Java\r\nJunit\r\nHTML\r\nCSS\r\nJavaScript",
+      "fwTools": "Spring Boot\r\neclipse",
+      "phases": "製造,単体テスト,結合テスト"
+    },
+    {
+      "period": "",
+      "organization": "",
+      "roleOverview": "人事管理システム\r\n【プロジェクト概要】\r\n企業従業員の個人情報や人事異動の登録、更新、削除、検索等の企業内部用システム開発\r\n\r\n【担当フェーズ】\r\n詳細設計、開発、単体テスト、結合テスト\r\n\r\n【業務内容】\r\n・詳細設計書の改修\r\n・機能追加\r\n・テスト仕様書の作成\r\n・テスト実施",
+      "startDate": "2021-10-01",
+      "endDate": "2022-07-01",
+      "months": 10,
+      "workplace": "日本",
+      "role": "PG",
+      "osDb": "Windows/Oracle",
+      "languages": "Java\r\nHTML\r\nCSS\r\nJavaScript",
+      "fwTools": "struts\r\neclipse",
+      "phases": "詳細設計,製造,単体テスト,結合テスト,総合テスト"
+    },
+    {
+      "period": "",
+      "organization": "",
+      "roleOverview": "求職システム\r\n【プロジェクト概要】\r\n各事業部にて管理されている複数の求職システムを、統合し一括で管理する作業\r\n\r\n【担当フェーズ】\r\n詳細設計、開発、単体テスト、結合テスト、保守\r\n\r\n【業務内容】\r\n・詳細設計書の作成\r\n・テスト仕様書の作成\r\n・テスト実施\r\n・機能追加\r\n・システム改修\r\n・ユーザーからの問い合わせ対応",
+      "startDate": "2022-10-01",
+      "endDate": "2023-07-01",
+      "months": 10,
+      "workplace": "日本",
+      "role": "PG",
+      "osDb": "Windows/MySQL",
+      "languages": "Java\r\nHTML\r\nCSS\r\nJavaScript",
+      "fwTools": "struts\r\nAzure\r\neclipse",
+      "phases": "詳細設計,製造,単体テスト,結合テスト,総合テスト"
+    },
+    {
+      "period": "",
+      "organization": "",
+      "roleOverview": "求職システム\r\n【プロジェクト概要】\r\n既存の求職システムの一部機能を Struts からSpring MVC にリプレイスする作業\r\n\r\n【担当フェーズ】\r\n詳細設計、開発、単体テスト\r\n\r\n【業務内容】\r\n・詳細設計書の作成\r\n・テスト仕様書の作成\r\n・テスト実施\r\n・システム改修",
+      "startDate": "2023-08-01",
+      "endDate": "2024-01-01",
+      "months": 6,
+      "workplace": "日本",
+      "role": "PG",
+      "osDb": "Windows/Oracle",
+      "languages": "Java\r\nHTML\r\nCSS\r\nJavaScript",
+      "fwTools": "Spring\r\nAzure\r\nintellij idea",
+      "phases": "詳細設計,製造,単体テスト,結合テスト"
+    },
+    {
+      "period": "",
+      "organization": "",
+      "roleOverview": "ラーニングマネジメントシステム\r\n【プロジェクト概要】\r\n社内製品のラーニングマネジメントシステムカスタマイズ作成\r\n\r\n【担当フェーズ】\r\n詳細設計、開発、単体テスト、結合テスト、保守運用\r\n\r\n【業務内容】\r\n・詳細設計書の改修\r\n・機能追加\r\n・テスト仕様書の作成\r\n・テスト実施",
+      "startDate": "2024-04-01",
+      "endDate": "2025-07-01",
+      "months": 16,
+      "workplace": "日本",
+      "role": "PG",
+      "osDb": "Windows/SQLserver",
+      "languages": "PHP\r\nHTML\r\nCSS\r\nJavaScript",
+      "fwTools": "cakePHP\r\neclipse",
+      "phases": "詳細設計,製造,単体テスト,結合テスト,総合テスト"
+    },
+    {
+      "period": "",
+      "organization": "",
+      "roleOverview": "交通システム\r\n【プロジェクト概要】\r\nバッチの開発\r\n\r\n【担当フェーズ】\r\n詳細設計、開発、単体テスト、結合テスト\r\n\r\n【業務内容】\r\n・バッチの詳細設計書の作成\r\n・バッチの製造\r\n・テスト仕様書の作成\r\n・テスト実施",
+      "startDate": "2025-08-01",
+      "endDate": "2025-12-01",
+      "months": 5,
+      "workplace": "日本",
+      "role": "PG",
+      "osDb": "Windows/PostgreSQL・Oracle",
+      "languages": "Java\r\nJunit",
+      "fwTools": "Spring\r\neclipse",
+      "phases": "詳細設計,製造,単体テスト,結合テスト"
+    }
+  ],
+  "attendance": {
+    "attendanceRate": 0,
+    "lateEarlyCount": 0,
+    "paidLeaveRemaining": 0,
+    "periodLabel": null
+  },
+  "evaluationHistory": {
+    "yearLabel": "",
+    "statusText": "",
+    "nextEvaluationNote": ""
+  },
+  "memo": null,
+  "evaluationItems": [],
+  "overallEvaluation": {
+    "overallRank": "B",
+    "rankLabel": "",
+    "continuationText": "",
+    "evaluationDate": "",
+    "evaluatorName": "",
+    "evaluatorDepartment": "",
+    "overallComment": ""
+  },
+  "salary": {
+    "basicSalaryMonthly": 0,
+    "commuterAllowance": 0,
+    "annualSalary": 0,
+    "bonus": 0,
+    "overtimeRate": 0,
+    "paymentDay": null,
+    "billingUnitPrice": 0
+  },
+  "hr": {
+    "hireDate": null,
+    "contractStartDate": null,
+    "contractEndDate": null,
+    "socialInsuranceStatus": null,
+    "employmentInsuranceNo": null,
+    "pensionNo": null,
+    "emergencyContactName": null,
+    "emergencyContactPhone": null,
+    "emergencyContactRelation": null,
+    "paidLeaveStartDate": null
+  }
+}

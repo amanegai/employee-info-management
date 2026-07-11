@@ -1,0 +1,9 @@
+{
+  "approvalMode": "manual",
+  "autoRun": {
+    "block_instructions": [
+      "Do not run broad codebase searches or read many files without explicit user approval",
+      "Do not launch parallel subagents or background agents unless the user asks"
+    ]
+  }
+}
