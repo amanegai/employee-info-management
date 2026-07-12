@@ -11,7 +11,7 @@ Windows 服务器请参阅 [deploy-docker.md](deploy-docker.md)。
 
 | 项目 | 要求 |
 |------|------|
-| 操作系统 | Ubuntu 22.04+、Debian 12+、RHEL 8+ 等 |
+| 操作系统 | **Ubuntu 24.04 LTS**（推荐，AWS 已选定）、Debian 12+、RHEL 8+ 等 |
 | Docker | 20.10+ |
 | Docker Compose | v2（`docker compose` 插件） |
 | CPU / 内存 | 建议 **2 核 4GB+**（营业约 10 人 + 人事 2 人规模足够） |

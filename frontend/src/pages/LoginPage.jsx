@@ -5,15 +5,6 @@ import RecoveryCodesPanel from '../components/RecoveryCodesPanel';
 import { useAuth } from '../context/AuthContext';
 import { api } from '../api';
 
-const DEMO_ACCOUNTS = [
-  { user: 'admin', pass: 'admin123', role: '管理者・全社員' },
-  { user: 'hr', pass: 'hr123', role: '人事・全社員' },
-  { user: 'sales', pass: 'sales123', role: '営業・人事部除く全社員' },
-  { user: 'div1', pass: 'div123', role: '事業一部長・事業一部配下' },
-  { user: 'dept1', pass: 'dept123', role: '開発一部長・開発一部のみ' },
-  { user: 'user', pass: 'user123', role: '一般・全社員閲覧' },
-];
-
 function normalizeMfaVerifyInput(value) {
   const upper = value.toUpperCase();
   if (/[A-Z-]/.test(upper)) {
@@ -187,12 +178,6 @@ export default function LoginPage() {
     }
   }
 
-  function fillDemoAccount(account) {
-    resetMfaFlow();
-    setUsername(account.user);
-    setPassword(account.pass);
-  }
-
   return (
     <div className="login-page">
       <div className="login-page-bg" aria-hidden="true">
@@ -305,31 +290,6 @@ export default function LoginPage() {
                     )}
                   </button>
                 </form>
-
-                <div className="login-demo">
-                  <div className="login-demo-head">
-                    <i className="bi bi-info-circle" aria-hidden="true" />
-                    <span>初期アカウント（初回起動時自動作成）</span>
-                  </div>
-                  <div className="login-demo-grid">
-                    {DEMO_ACCOUNTS.map((account) => (
-                      <button
-                        key={account.user}
-                        type="button"
-                        className="login-demo-item"
-                        onClick={() => fillDemoAccount(account)}
-                        title="クリックで入力欄に反映"
-                      >
-                        <span className="login-demo-credentials">
-                          <code>{account.user}</code>
-                          <span className="login-demo-sep">/</span>
-                          <code>{account.pass}</code>
-                        </span>
-                        <span className="login-demo-role">{account.role}</span>
-                      </button>
-                    ))}
-                  </div>
-                </div>
               </>
             )}
 
