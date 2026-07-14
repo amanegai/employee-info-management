@@ -37,6 +37,33 @@ export default function BasicFormTab({ form, master, isEdit, onChange }) {
     onChange({ ...form, personal: { ...form.personal, [field]: value } });
   }
 
+  function updateNationality(nationalityId) {
+    const selected = (master?.nationalities ?? []).find((n) => String(n.id) === String(nationalityId));
+    const isJapan = selected?.isJapan === true;
+    onChange({
+      ...form,
+      personal: {
+        ...form.personal,
+        nationalityId: nationalityId || '',
+        ...(isJapan || !nationalityId
+          ? {
+              residenceStatusId: '',
+              residenceCardNumber: '',
+              residenceCardExpiry: '',
+            }
+          : {}),
+      },
+    });
+  }
+
+  const selectedNationality = useMemo(() => {
+    const id = form.personal.nationalityId;
+    if (!id) return null;
+    return (master?.nationalities ?? []).find((n) => String(n.id) === String(id)) ?? null;
+  }, [form.personal.nationalityId, master]);
+
+  const showResidenceFields = Boolean(selectedNationality && !selectedNationality.isJapan);
+
   return (
     <>
       <div className="detail-summary-card mb-3">
@@ -227,16 +254,65 @@ export default function BasicFormTab({ form, master, isEdit, onChange }) {
             </FormField>
           </div>
           <div className="col-md-4">
-            <FormField label="国籍" htmlFor="nationality">
-              <input
-                id="nationality"
-                type="text"
-                className="form-control"
-                value={form.personal.nationality}
-                onChange={(e) => updatePersonal('nationality', e.target.value)}
-              />
+            <FormField label="国籍" htmlFor="nationalityId">
+              <select
+                id="nationalityId"
+                className="form-select"
+                value={form.personal.nationalityId}
+                onChange={(e) => updateNationality(e.target.value)}
+              >
+                <option value="">{EMPTY_DISPLAY}</option>
+                {(master?.nationalities ?? []).map((n) => (
+                  <option key={n.id} value={String(n.id)}>
+                    {n.name}
+                  </option>
+                ))}
+              </select>
             </FormField>
           </div>
+          {showResidenceFields && (
+            <>
+              <div className="col-md-4">
+                <FormField label="在留資格" htmlFor="residenceStatusId">
+                  <select
+                    id="residenceStatusId"
+                    className="form-select"
+                    value={form.personal.residenceStatusId}
+                    onChange={(e) => updatePersonal('residenceStatusId', e.target.value)}
+                  >
+                    <option value="">{EMPTY_DISPLAY}</option>
+                    {(master?.residenceStatuses ?? []).map((s) => (
+                      <option key={s.id} value={String(s.id)}>
+                        {s.name}
+                      </option>
+                    ))}
+                  </select>
+                </FormField>
+              </div>
+              <div className="col-md-4">
+                <FormField label="在留カード番号" htmlFor="residenceCardNumber">
+                  <input
+                    id="residenceCardNumber"
+                    type="text"
+                    className="form-control"
+                    value={form.personal.residenceCardNumber}
+                    onChange={(e) => updatePersonal('residenceCardNumber', e.target.value)}
+                  />
+                </FormField>
+              </div>
+              <div className="col-md-4">
+                <FormField label="在留カード有効期限" htmlFor="residenceCardExpiry">
+                  <input
+                    id="residenceCardExpiry"
+                    type="date"
+                    className="form-control"
+                    value={form.personal.residenceCardExpiry}
+                    onChange={(e) => updatePersonal('residenceCardExpiry', e.target.value)}
+                  />
+                </FormField>
+              </div>
+            </>
+          )}
           <div className="col-md-4">
             <FormField label="結婚" htmlFor="maritalStatus">
               <select

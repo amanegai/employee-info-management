@@ -74,7 +74,9 @@ public class EmployeeService {
                 MasterData.ASSIGNMENT_ROLES,
                 MasterData.EMPLOYEE_TYPES,
                 MasterData.WORK_STATUSES,
-                MasterData.allEvaluations()
+                MasterData.allEvaluations(),
+                repository.findAllNationalities(),
+                repository.findAllResidenceStatuses()
         );
     }
 

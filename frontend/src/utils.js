@@ -526,7 +526,10 @@ export function endDateFieldLabel(workStatus) {
 const EMPTY_PERSONAL = {
   gender: '',
   birthDate: '',
-  nationality: '',
+  nationalityId: '',
+  residenceStatusId: '',
+  residenceCardNumber: '',
+  residenceCardExpiry: '',
   phone: '',
   email: '',
   address: '',
@@ -623,6 +626,28 @@ export const SKILL_MARK_OPTIONS = ['◎', '〇', '△'];
 export const TECHNICAL_SKILL_MARK_OPTIONS = SKILL_MARK_OPTIONS;
 export const MARITAL_STATUS_OPTIONS = ['未婚', '既婚'];
 export const EDUCATION_DEGREE_OPTIONS = ['学士', '修士', '博士', 'その他'];
+
+/** 国籍名からマスタIDへ変換（履歴書インポート用） */
+export function resolveNationalityIdFromName(name, nationalities = []) {
+  const text = name?.trim();
+  if (!text || !nationalities.length) return '';
+  const normalized = text.toLowerCase();
+  const aliases = {
+    日本国: '日本',
+    japan: '日本',
+    中国籍: '中国',
+    china: '中国',
+    中華人民共和国: '中国',
+    韓国籍: '韓国',
+    korea: '韓国',
+    大韓民国: '韓国',
+  };
+  const target = aliases[normalized] || aliases[text] || text;
+  const exact = nationalities.find((n) => n.name === target || n.name.toLowerCase() === normalized);
+  if (exact) return String(exact.id);
+  const other = nationalities.find((n) => n.name === 'その他');
+  return other ? String(other.id) : '';
+}
 
 const EMPTY_ATTENDANCE = {
   attendanceRate: '',
@@ -738,7 +763,14 @@ export function detailToForm(detail) {
       ? {
           gender: detail.personal.gender ?? '',
           birthDate: detail.personal.birthDate ?? '',
-          nationality: detail.personal.nationality ?? '',
+          nationalityId:
+            detail.personal.nationalityId != null ? String(detail.personal.nationalityId) : '',
+          residenceStatusId:
+            detail.personal.residenceStatusId != null
+              ? String(detail.personal.residenceStatusId)
+              : '',
+          residenceCardNumber: detail.personal.residenceCardNumber ?? '',
+          residenceCardExpiry: detail.personal.residenceCardExpiry ?? '',
           phone: detail.personal.phone ?? '',
           email: detail.personal.email ?? '',
           address: detail.personal.address ?? '',
@@ -931,6 +963,16 @@ export function formToSavePayload(form) {
     endDate: withEval.endDate || null,
     personal: {
       ...withEval.personal,
+      nationalityId:
+        withEval.personal.nationalityId !== '' && withEval.personal.nationalityId != null
+          ? Number(withEval.personal.nationalityId)
+          : null,
+      residenceStatusId:
+        withEval.personal.residenceStatusId !== '' && withEval.personal.residenceStatusId != null
+          ? Number(withEval.personal.residenceStatusId)
+          : null,
+      residenceCardNumber: withEval.personal.residenceCardNumber?.trim() || null,
+      residenceCardExpiry: withEval.personal.residenceCardExpiry || null,
       itIndustryYears:
         withEval.personal.itIndustryYears !== ''
           ? Number(withEval.personal.itIndustryYears)

@@ -3,6 +3,8 @@ package jp.dispatch.employee.repository;
 import jp.dispatch.employee.dto.DepartmentDto;
 import jp.dispatch.employee.dto.EmployeeDto;
 import jp.dispatch.employee.dto.EmployeeRequest;
+import jp.dispatch.employee.dto.NationalityDto;
+import jp.dispatch.employee.dto.ResidenceStatusDto;
 import jp.dispatch.employee.dto.SummaryDto;
 import jp.dispatch.employee.config.DatabaseDialect;
 import jp.dispatch.employee.config.JdbcGeneratedKeySupport;
@@ -130,6 +132,41 @@ public class EmployeeRepository {
                         rs.getLong("id"),
                         rs.getString("name"),
                         rs.getObject("parent_id") != null ? rs.getLong("parent_id") : null
+                )
+        );
+    }
+
+    public List<NationalityDto> findAllNationalities() {
+        return jdbc.query(
+                """
+                SELECT id, name, is_japan, sort_order, is_active
+                FROM nationality
+                WHERE is_active = TRUE
+                ORDER BY sort_order, id
+                """,
+                (rs, rowNum) -> new NationalityDto(
+                        rs.getLong("id"),
+                        rs.getString("name"),
+                        rs.getBoolean("is_japan"),
+                        rs.getInt("sort_order"),
+                        rs.getBoolean("is_active")
+                )
+        );
+    }
+
+    public List<ResidenceStatusDto> findAllResidenceStatuses() {
+        return jdbc.query(
+                """
+                SELECT id, name, sort_order, is_active
+                FROM residence_status
+                WHERE is_active = TRUE
+                ORDER BY sort_order, id
+                """,
+                (rs, rowNum) -> new ResidenceStatusDto(
+                        rs.getLong("id"),
+                        rs.getString("name"),
+                        rs.getInt("sort_order"),
+                        rs.getBoolean("is_active")
                 )
         );
     }

@@ -9,6 +9,8 @@ public record MasterDto(
         List<String> assignmentRoles,
         List<String> employeeTypes,
         List<String> workStatuses,
-        List<String> evaluations
+        List<String> evaluations,
+        List<NationalityDto> nationalities,
+        List<ResidenceStatusDto> residenceStatuses
 ) {
 }

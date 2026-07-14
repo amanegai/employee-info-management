@@ -102,6 +102,22 @@ export default function BasicTab({ employee }) {
               <div className="col-md-4">
                 <InfoCell label="国籍" value={p.nationality} />
               </div>
+              {p.nationalityId && p.nationalityIsJapan === false && (
+                <>
+                  <div className="col-md-4">
+                    <InfoCell label="在留資格" value={p.residenceStatus} />
+                  </div>
+                  <div className="col-md-4">
+                    <InfoCell label="在留カード番号" value={p.residenceCardNumber} />
+                  </div>
+                  <div className="col-md-4">
+                    <InfoCell
+                      label="在留カード有効期限"
+                      value={formatJapaneseDate(p.residenceCardExpiry)}
+                    />
+                  </div>
+                </>
+              )}
               <div className="col-md-4">
                 <InfoCell label="結婚" value={p.maritalStatus} />
               </div>

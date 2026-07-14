@@ -334,7 +334,7 @@ export default function EmployeeListPage() {
 
     try {
 
-      const form = await parseResumeXlsxToForm(file);
+      const form = await parseResumeXlsxToForm(file, master?.nationalities ?? masterRef.current?.nationalities ?? []);
 
       const payload = formToImportSavePayload(form, '');
 

@@ -4,6 +4,7 @@ import {
   CAREER_PHASE_OPTIONS,
   CAREER_PHASE_ALIASES,
   EMPTY_EMPLOYEE_FORM,
+  resolveNationalityIdFromName,
   sortCareersByNewestFirst,
 } from '../utils';
 import {
@@ -389,7 +390,7 @@ function parseCareersFromGrid(grid) {
   return sortCareersByNewestFirst(careers);
 }
 
-function parseGridResume(grid) {
+function parseGridResume(grid, nationalities = []) {
   const name = gridText(grid, 4, 4);
   if (!name) {
     throw new Error('氏名が読み取れません。技術者履歴書テンプレート（.xlsx）か確認してください');
@@ -398,6 +399,7 @@ function parseGridResume(grid) {
   const japaneseConversation = gridText(grid, 10, 4);
   const englishConversation = gridText(grid, 11, 4);
   const { readCol, writeCol } = findLanguageColumns(grid, 9);
+  const nationalityName = gridText(grid, 4, 10);
 
   return {
     ...EMPTY_EMPLOYEE_FORM,
@@ -411,7 +413,7 @@ function parseGridResume(grid) {
       ...EMPTY_EMPLOYEE_FORM.personal,
       furigana: gridText(grid, 3, 4),
       gender: gridText(grid, 4, 8),
-      nationality: gridText(grid, 4, 10),
+      nationalityId: resolveNationalityIdFromName(nationalityName, nationalities),
       birthDate: parseAgeToBirthDate(gridText(grid, 4, 12)),
       maritalStatus: gridText(grid, 4, 14),
       nearestStation: gridText(grid, 4, 16),
@@ -442,9 +444,10 @@ function parseGridResume(grid) {
 /**
  * 技術者履歴書 Excel（.xlsx）を社員フォームデータに変換
  * @param {File} file
+ * @param {Array<{id:number,name:string}>} [nationalities]
  * @returns {Promise<object>}
  */
-export async function parseResumeXlsxToForm(file) {
+export async function parseResumeXlsxToForm(file, nationalities = []) {
   if (!file) {
     throw new Error('ファイルが選択されていません');
   }
@@ -463,5 +466,5 @@ export async function parseResumeXlsxToForm(file) {
     throw new Error('対応していない Excel 形式です。技術者履歴書テンプレート（.xlsx）をご利用ください');
   }
 
-  return parseGridResume(grid);
+  return parseGridResume(grid, nationalities);
 }
