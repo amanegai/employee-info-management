@@ -10,6 +10,7 @@ public final class FileCategoryData {
     public static final String CONTRACT = "CONTRACT";
     public static final String PAYROLL = "PAYROLL";
     public static final String APPLICATION = "APPLICATION";
+    public static final String RESUME = "RESUME";
     public static final String OTHER = "OTHER";
 
     public static final List<String> CATEGORIES = List.of(
@@ -18,6 +19,7 @@ public final class FileCategoryData {
             CONTRACT,
             PAYROLL,
             APPLICATION,
+            RESUME,
             OTHER
     );
 

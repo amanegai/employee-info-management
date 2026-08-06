@@ -1014,4 +1014,28 @@ CREATE INDEX IF NOT EXISTS idx_cancel_followup_assignee ON assignment_cancel_fol
 
 ---
 
+## 13. BP求援・临时候补（增量，2026-08）
+
+社内人员不足时的协作流程。详细权限・API・画面见 [basic-design/03-案件と選考.md](basic-design/03-案件と選考.md)。
+
+### 13.1 与既存选考的关系
+
+| 路径 | 对象 | 结果 |
+|------|------|------|
+| 既存 `project_candidate` | 已在籍社員 | CONFIRMED → 配属 |
+| BP `bp_help_referral` | 尚未入社的外部候补 | HIRED 时才创建 BP 社員 + candidate + 配属 |
+
+### 13.2 临时候补状态机（摘要）
+
+`PENDING → APPROVED → SUBMITTED → INTERVIEW_SCHEDULED → INTERVIEWING → HIRED`  
+终态：`REJECTED` / `WITHDRAWN` / `CLIENT_REJECTED` / `DECLINED`（不合格时软删除 RESUME 文件）。
+
+### 13.3 人数与案件状态
+
+- 临时候补采用与既存候補採用同样增加 `headcount_filled`，并触发求援自动结束（満员等）。
+- 案件编辑变更 `headcount_required` 时，对 OPEN / PARTIALLY_FILLED / FILLED 自动重算状态。
+
+---
+
 *本文档为开发设计基线，实现时以代码与迁移脚本为准。*
+*增量 2026-08：§13 BP求援・临时候补。*

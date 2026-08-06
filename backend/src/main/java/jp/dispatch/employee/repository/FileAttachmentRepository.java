@@ -89,6 +89,20 @@ public class FileAttachmentRepository {
         );
     }
 
+    public boolean assignToEmployee(long fileId, long employeeId) {
+        int updated = jdbc.update(
+                """
+                UPDATE file_attachment
+                SET employee_id = ?
+                WHERE id = ?
+                  AND deleted_at IS NULL
+                """,
+                employeeId,
+                fileId
+        );
+        return updated > 0;
+    }
+
     public List<FileAttachmentDto> search(String keyword, String category, String targetMonth) {
         var sql = new StringBuilder(
                 """

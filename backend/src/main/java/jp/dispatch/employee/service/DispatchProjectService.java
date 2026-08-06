@@ -29,25 +29,31 @@ public class DispatchProjectService {
 
     private static final DateTimeFormatter TIMESTAMP = DateTimeFormatter.ofPattern("yyyy-MM-dd'T'HH:mm:ss");
     private static final ZoneId ZONE = ZoneId.of("Asia/Tokyo");
+    /** 確定人数から自動算出するステータス（保留・終了などの手動設定は上書きしない） */
+    private static final java.util.Set<String> AUTO_MANAGED_STATUSES =
+            java.util.Set.of("OPEN", "PARTIALLY_FILLED", "FILLED");
 
     private final DispatchProjectRepository projectRepository;
     private final ProjectCandidateRepository candidateRepository;
     private final RelatedDataCleanupRepository relatedDataCleanupRepository;
     private final ClientRepository clientRepository;
     private final SecurityService securityService;
+    private final BpHelpNotificationService bpHelpNotificationService;
 
     public DispatchProjectService(
             DispatchProjectRepository projectRepository,
             ProjectCandidateRepository candidateRepository,
             RelatedDataCleanupRepository relatedDataCleanupRepository,
             ClientRepository clientRepository,
-            SecurityService securityService
+            SecurityService securityService,
+            BpHelpNotificationService bpHelpNotificationService
     ) {
         this.projectRepository = projectRepository;
         this.candidateRepository = candidateRepository;
         this.relatedDataCleanupRepository = relatedDataCleanupRepository;
         this.clientRepository = clientRepository;
         this.securityService = securityService;
+        this.bpHelpNotificationService = bpHelpNotificationService;
     }
 
     public List<String> getProjectStatuses() {
@@ -94,6 +100,7 @@ public class DispatchProjectService {
                 resolveProjectRole(request.projectRole()),
                 blankToNull(request.interviewRounds()),
                 ownerUserId,
+                user != null ? user.getId() : null,
                 blankToNull(request.notes()),
                 blankToNull(request.periodNotes()),
                 now
@@ -129,7 +136,32 @@ public class DispatchProjectService {
                 blankToNull(request.periodNotes()),
                 now
         );
+        syncHeadcountStatus(id, now);
         return getById(id);
+    }
+
+    /** 募集人数の変更に合わせて自動管理ステータス（募集中／一部確定／満員）を再計算する */
+    private void syncHeadcountStatus(long id, String now) {
+        var header = projectRepository.findHeaderById(id).orElse(null);
+        if (header == null || !AUTO_MANAGED_STATUSES.contains(header.status())) {
+            return;
+        }
+        int filled = header.headcountFilled();
+        String next;
+        if (header.headcountUnlimited()) {
+            next = filled > 0 ? "PARTIALLY_FILLED" : "OPEN";
+        } else if (filled >= header.headcountRequired()) {
+            next = "FILLED";
+        } else if (filled > 0) {
+            next = "PARTIALLY_FILLED";
+        } else {
+            next = "OPEN";
+        }
+        if (next.equals(header.status())) {
+            return;
+        }
+        projectRepository.updateStatus(id, next, null, now);
+        bpHelpNotificationService.autoCancelIfRequested(id);
     }
 
     public DispatchProjectDto updateStatus(long id, DispatchProjectStatusRequest request) {
@@ -143,6 +175,7 @@ public class DispatchProjectService {
             throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "ステータスが不正です");
         }
         projectRepository.updateStatus(id, status, blankToNull(request.notes()), timestampNow());
+        bpHelpNotificationService.autoCancelIfRequested(id);
         return getById(id);
     }
 
@@ -289,6 +322,15 @@ public class DispatchProjectService {
                 project.ownerDisplayName(),
                 project.notes(),
                 project.periodNotes(),
+                project.bpHelpRequested(),
+                project.bpHelpRequestedAt(),
+                project.bpHelpRequestedBy(),
+                project.bpHelpRequesterName(),
+                project.bpHelpNote(),
+                project.bpHelpSlotsNeeded(),
+                project.createdBy(),
+                project.createdByName(),
+                project.pendingReferralCount(),
                 project.createdAt(),
                 project.updatedAt(),
                 candidates

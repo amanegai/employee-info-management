@@ -30,6 +30,10 @@
 - JDK 21+
 - Maven 3.9+
 - Node.js 20+
+- PostgreSQL 16（デフォルト；詳細は開発環境標準を参照）
+
+> **开发环境标准 / 開発環境標準**：[中文](docs/dev-environment-standard.md) · [日本語](docs/dev-environment-standard-ja.md)  
+> **開発協働（チーム向け）**：[docs/collaboration/](docs/collaboration/README.md)（リソース・Owner・Git/リリース）
 
 ## 起動手順
 

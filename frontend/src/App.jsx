@@ -23,6 +23,7 @@ const ProjectMatchPage = lazy(() => import('./pages/ProjectMatchPage'));
 const ProjectListPage = lazy(() => import('./pages/ProjectListPage'));
 const ProjectDetailPage = lazy(() => import('./pages/ProjectDetailPage'));
 const ProjectFormPage = lazy(() => import('./pages/ProjectFormPage'));
+const BpHelpRequestsPage = lazy(() => import('./pages/BpHelpRequestsPage'));
 const EmployeeStatusSuggestionsPage = lazy(() => import('./pages/EmployeeStatusSuggestionsPage'));
 const AssignmentCancelFollowupsPage = lazy(() => import('./pages/AssignmentCancelFollowupsPage'));
 const ClientEventPage = lazy(() => import('./pages/ClientEventPage'));
@@ -92,6 +93,7 @@ function AppRoutes() {
               <Route path="/project-match" element={<ProjectMatchPage />} />
               <Route path="/projects" element={<ProjectListPage />} />
               <Route path="/projects/:id" element={<ProjectDetailPage />} />
+              <Route path="/bp-help-requests" element={<BpHelpRequestsPage />} />
             </Route>
             <Route path="/files" element={<FileManagementPage />} />
             <Route path="/meeting-rooms" element={<MeetingRoomCalendarPage />} />

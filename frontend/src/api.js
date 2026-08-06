@@ -109,6 +109,61 @@ export const api = {
   patchProjectStatus: (id, body) =>
     request(`/projects/${id}/status`, { method: 'PATCH', body: JSON.stringify(body) }),
   deleteProject: (id) => request(`/projects/${id}`, { method: 'DELETE' }),
+  getBpHelpRequests: () => request('/bp-help-requests'),
+  getBpHelpRequestCount: () => request('/bp-help-requests/count'),
+  requestBpHelp: (id, body) =>
+    request(`/projects/${id}/bp-help`, { method: 'POST', body: JSON.stringify(body ?? {}) }),
+  cancelBpHelp: (id) => request(`/projects/${id}/bp-help/cancel`, { method: 'POST' }),
+  getBpHelpReferrals: (projectId) => request(`/projects/${projectId}/bp-help/referrals`),
+  submitBpHelpReferral: async (projectId, { candidateName, bpCompanyName, note, resume }) => {
+    const formData = new FormData();
+    formData.append('candidateName', candidateName);
+    if (bpCompanyName?.trim()) formData.append('bpCompanyName', bpCompanyName.trim());
+    if (note?.trim()) formData.append('note', note.trim());
+    formData.append('resume', resume);
+    const res = await fetch(`${API_BASE}/projects/${projectId}/bp-help/referrals`, {
+      method: 'POST',
+      credentials: 'include',
+      body: formData,
+    });
+    if (res.status === 401) {
+      unauthorizedHandler?.();
+    }
+    if (!res.ok) {
+      let message = res.statusText;
+      try {
+        const body = await res.json();
+        message = body.detail || body.message || body.error || body.title || message;
+      } catch {
+        /* ignore */
+      }
+      throw new Error(message);
+    }
+    return res.json();
+  },
+  approveBpHelpReferral: (id) => request(`/bp-help/referrals/${id}/approve`, { method: 'POST' }),
+  rejectBpHelpReferral: (id, body) =>
+    request(`/bp-help/referrals/${id}/reject`, { method: 'POST', body: JSON.stringify(body ?? {}) }),
+  submitBpHelpReferralToClient: (id) =>
+    request(`/bp-help/referrals/${id}/submit`, { method: 'POST' }),
+  advanceBpHelpReferralStage: (id, body) =>
+    request(`/bp-help/referrals/${id}/stage`, { method: 'POST', body: JSON.stringify(body ?? {}) }),
+  hireBpHelpReferral: (id, body) =>
+    request(`/bp-help/referrals/${id}/hire`, { method: 'POST', body: JSON.stringify(body ?? {}) }),
+  withdrawBpHelpReferral: (id) =>
+    request(`/bp-help/referrals/${id}/withdraw`, { method: 'POST' }),
+  getNotifications: (params = {}) => {
+    const q = new URLSearchParams();
+    if (params.unreadOnly) q.set('unreadOnly', 'true');
+    if (params.limit) q.set('limit', String(params.limit));
+    const query = q.toString();
+    return request(`/notifications${query ? `?${query}` : ''}`);
+  },
+  getNotificationUnreadCount: () => request('/notifications/unread-count'),
+  markNotificationRead: (id) => request(`/notifications/${id}/read`, { method: 'POST' }),
+  markAllNotificationsRead: () => request('/notifications/read-all', { method: 'POST' }),
+  markProjectNotificationsRead: (projectId) =>
+    request(`/notifications/by-project/${projectId}/read`, { method: 'POST' }),
   getProjectCandidates: (projectId) => request(`/projects/${projectId}/candidates`),
   addProjectCandidate: (projectId, body) =>
     request(`/projects/${projectId}/candidates`, { method: 'POST', body: JSON.stringify(body) }),

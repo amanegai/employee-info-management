@@ -72,6 +72,21 @@ export function canManageUsers(user) {
   return hasRole(user, 'ADMIN');
 }
 
+/** BP求援の開始・更新・終了（案件作成者／自社担当／管理者） */
+export function canControlBpHelp(user, project) {
+  if (!canWriteProjectFeatures(user) || !project) return false;
+  if (hasRole(user, 'ADMIN')) return true;
+  return user?.id === project.createdBy || user?.id === project.ownerUserId;
+}
+
+/** 臨時候補の承認・却下・顧客提出（自社担当、未設定時は作成者／管理者） */
+export function canReviewBpReferral(user, project) {
+  if (!canWriteProjectFeatures(user) || !project) return false;
+  if (hasRole(user, 'ADMIN')) return true;
+  const reviewerId = project.ownerUserId ?? project.createdBy;
+  return user?.id === reviewerId;
+}
+
 export function canViewClientEvents(user) {
   return (
     hasRole(user, 'ADMIN') ||

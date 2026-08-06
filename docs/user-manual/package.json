@@ -1,0 +1,11 @@
+{
+  "name": "user-manual-pdf",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "build:pdf": "node build-pdf.mjs"
+  },
+  "devDependencies": {
+    "md-to-pdf": "^5.2.5"
+  }
+}

@@ -1,0 +1,35 @@
+package jp.dispatch.employee.dto;
+
+public record BpHelpReferralDto(
+        long id,
+        long projectId,
+        String candidateName,
+        String bpCompanyName,
+        long resumeFileId,
+        String resumeFileName,
+        String resumeContentType,
+        Long resumeSizeBytes,
+        String note,
+        String status,
+        Long submittedBy,
+        String submittedByName,
+        String submittedAt,
+        Long reviewedBy,
+        String reviewedByName,
+        String reviewedAt,
+        String reviewNote,
+        Long submittedToClientBy,
+        String submittedToClientByName,
+        String submittedToClientAt,
+        String interviewAt,
+        String closeReason,
+        Long hiredEmployeeId,
+        String hiredEmployeeCode,
+        String hiredEmployeeName,
+        String hiredAt,
+        Long hiredBy,
+        String hiredByName,
+        String createdAt,
+        String updatedAt
+) {
+}

@@ -12,6 +12,10 @@ deploy-export/
 frontend/node_modules/
 frontend/dist/
 
+# User manual PDF build
+docs/user-manual/node_modules/
+docs/user-manual/pdf/.tmp/
+
 # 勿将 Vite 构建产物提交到 backend（由 copy-frontend 从 dist 复制）
 backend/src/main/resources/static/
 

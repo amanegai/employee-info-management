@@ -5,6 +5,7 @@ import { canManageUsers, canViewClientEvents, canViewClientRecords, canManageHrO
 import { useAuth } from '../context/AuthContext';
 import { clearProjectMatchStorage } from '../utils/projectMatchState';
 import AppMessageBar from './AppMessageBar';
+import NotificationBell from './NotificationBell';
 import PageGuideTour from './guide/PageGuideTour';
 
 export default function AppLayout() {
@@ -12,6 +13,7 @@ export default function AppLayout() {
   const navigate = useNavigate();
   const location = useLocation();
   const [cancelFollowupCount, setCancelFollowupCount] = useState(0);
+  const [bpHelpCount, setBpHelpCount] = useState(0);
   const [sidebarExpanded, setSidebarExpanded] = useState(false);
 
   const loadCancelFollowupCount = useCallback(async () => {
@@ -27,13 +29,28 @@ export default function AppLayout() {
     }
   }, [user]);
 
+  const loadBpHelpCount = useCallback(async () => {
+    if (!canViewProjectFeatures(user)) {
+      setBpHelpCount(0);
+      return;
+    }
+    try {
+      const result = await api.getBpHelpRequestCount();
+      setBpHelpCount(result?.openCount ?? 0);
+    } catch {
+      setBpHelpCount(0);
+    }
+  }, [user]);
+
   useEffect(() => {
     loadCancelFollowupCount();
+    loadBpHelpCount();
     const intervalId = window.setInterval(() => {
       loadCancelFollowupCount();
-    }, 60000);
+      loadBpHelpCount();
+    }, 20000);
     return () => window.clearInterval(intervalId);
-  }, [loadCancelFollowupCount]);
+  }, [loadCancelFollowupCount, loadBpHelpCount]);
 
   useEffect(() => {
     if (window.matchMedia('(max-width: 991.98px)').matches) {
@@ -99,6 +116,17 @@ export default function AppLayout() {
                 <NavLink to="/projects" title="案件管理" className={({ isActive }) => `app-sidebar-nav-link${isActive ? ' active' : ''}`}>
                   <i className="bi bi-briefcase" aria-hidden="true" />
                   <span className="app-sidebar-nav-label">案件管理</span>
+                </NavLink>
+                <NavLink
+                  to="/bp-help-requests"
+                  title="BP求援"
+                  className={({ isActive }) => `app-sidebar-nav-link${isActive ? ' active' : ''}`}
+                >
+                  <i className="bi bi-people" aria-hidden="true" />
+                  <span className="app-sidebar-nav-label">BP求援</span>
+                  {bpHelpCount > 0 && (
+                    <span className="app-sidebar-nav-badge">{bpHelpCount}</span>
+                  )}
                 </NavLink>
               </>
             )}
@@ -185,6 +213,7 @@ export default function AppLayout() {
         <header className="app-layout-header app-layout-header-actions-only">
           {user && (
             <div className="app-layout-header-actions">
+              <NotificationBell />
               <div className="app-header-user-chip" title={user.displayName || user.username}>
                 <div className="app-header-user-avatar" aria-hidden="true">
                   <i className="bi bi-person-fill" />

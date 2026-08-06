@@ -265,6 +265,21 @@ public class AuthUserRepository {
         );
     }
 
+    /** 案件・BP求援通知の宛先（人事以外の有効ユーザー。依頼者本人は呼び出し側で除外） */
+    public List<Long> findProjectNotificationRecipientIds() {
+        return jdbc.query(
+                """
+                SELECT DISTINCT u.id
+                FROM auth_user u
+                JOIN auth_user_role r ON r.user_id = u.id
+                WHERE u.enabled = 1
+                  AND r.role IN ('ADMIN', 'DIVISION_HEAD', 'DEPT_HEAD', 'SALES_HEAD', 'USER')
+                ORDER BY u.id
+                """,
+                (rs, rowNum) -> rs.getLong("id")
+        );
+    }
+
     public record AuthUserRecord(
             long id,
             String username,
