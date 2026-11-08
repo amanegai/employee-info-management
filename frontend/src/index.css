@@ -20639,28 +20639,229 @@ body.page-guide-is-open {
   font-size: 0.9em;
 }
 
-.mypage-paid-leave-help-list {
-  display: grid;
-  gap: 0.85rem;
+.mypage-paid-leave-help-content {
+  border: 1px solid rgba(226, 232, 240, 0.95);
+  border-radius: 1.1rem;
+  overflow: hidden;
+  box-shadow: 0 18px 40px rgba(15, 23, 42, 0.14);
 }
 
-.mypage-paid-leave-help-item {
-  display: grid;
-  gap: 0.2rem;
+.mypage-paid-leave-help-header {
+  padding: 1rem 1.15rem 0.85rem;
+  background:
+    radial-gradient(120% 90% at 0% 0%, rgba(45, 212, 191, 0.16) 0%, transparent 55%),
+    linear-gradient(180deg, #f8fffd 0%, #ffffff 100%);
 }
 
-.mypage-paid-leave-help-item dt {
+.mypage-paid-leave-help-header-main {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  min-width: 0;
+}
+
+.mypage-paid-leave-help-header-icon {
+  flex-shrink: 0;
+  width: 2.55rem;
+  height: 2.55rem;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 0.85rem;
+  color: #0f766e;
+  background: rgba(255, 255, 255, 0.92);
+  border: 1px solid rgba(45, 212, 191, 0.45);
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.9);
+  font-size: 1.15rem;
+}
+
+.mypage-paid-leave-help-title {
   margin: 0;
-  font-size: 0.8rem;
+  font-size: 1.05rem;
   font-weight: 700;
-  color: #475569;
+  letter-spacing: 0.01em;
+  color: #0f172a;
 }
 
-.mypage-paid-leave-help-item dd {
+.mypage-paid-leave-help-subtitle {
+  margin-top: 0.12rem;
+  font-size: 0.78rem;
+  color: #64748b;
+  line-height: 1.35;
+}
+
+.mypage-paid-leave-help-body {
+  padding: 0.35rem 1.05rem 0.35rem;
+  background: linear-gradient(180deg, #ffffff 0%, #f8fafc 100%);
+}
+
+.mypage-paid-leave-help-cards {
+  list-style: none;
   margin: 0;
-  font-size: 0.92rem;
-  line-height: 1.5;
-  color: #0f172a;
+  padding: 0;
+  display: grid;
+  gap: 0.7rem;
+}
+
+.mypage-paid-leave-help-card {
+  --plh-accent: #0f766e;
+  --plh-soft: #ecfdf8;
+  display: grid;
+  grid-template-columns: auto 1fr;
+  gap: 0.75rem;
+  align-items: start;
+  padding: 0.8rem 0.85rem;
+  border-radius: 0.9rem;
+  border: 1px solid color-mix(in srgb, var(--plh-accent) 18%, #e2e8f0);
+  background:
+    linear-gradient(135deg, var(--plh-soft) 0%, rgba(255, 255, 255, 0.96) 58%);
+}
+
+.mypage-paid-leave-help-card.tone-teal {
+  --plh-accent: #0f766e;
+  --plh-soft: #ecfdf8;
+}
+
+.mypage-paid-leave-help-card.tone-sky {
+  --plh-accent: #0369a1;
+  --plh-soft: #eef8ff;
+}
+
+.mypage-paid-leave-help-card.tone-amber {
+  --plh-accent: #b45309;
+  --plh-soft: #fff7ed;
+}
+
+.mypage-paid-leave-help-card.tone-violet {
+  --plh-accent: #5b21b6;
+  --plh-soft: #f5f3ff;
+}
+
+.mypage-paid-leave-help-card.tone-rose {
+  --plh-accent: #be123c;
+  --plh-soft: #fff1f2;
+}
+
+.mypage-paid-leave-help-card-icon {
+  width: 2.2rem;
+  height: 2.2rem;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 0.7rem;
+  color: var(--plh-accent);
+  background: rgba(255, 255, 255, 0.9);
+  border: 1px solid color-mix(in srgb, var(--plh-accent) 24%, white);
+  font-size: 1rem;
+}
+
+.mypage-paid-leave-help-card-label {
+  font-size: 0.78rem;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  color: var(--plh-accent);
+  margin-bottom: 0.2rem;
+}
+
+.mypage-paid-leave-help-card-text {
+  font-size: 0.9rem;
+  line-height: 1.55;
+  color: #1e293b;
+}
+
+.mypage-paid-leave-help-steps {
+  margin-top: 0.55rem;
+  padding: 0;
+  list-style: none;
+  display: grid;
+  gap: 0.35rem;
+  counter-reset: plh-step;
+}
+
+.mypage-paid-leave-help-steps li {
+  counter-increment: plh-step;
+  position: relative;
+  padding: 0.35rem 0.55rem 0.35rem 2rem;
+  border-radius: 0.55rem;
+  background: rgba(255, 255, 255, 0.82);
+  border: 1px solid rgba(226, 232, 240, 0.95);
+  font-size: 0.82rem;
+  color: #334155;
+}
+
+.mypage-paid-leave-help-steps li::before {
+  content: counter(plh-step);
+  position: absolute;
+  left: 0.45rem;
+  top: 50%;
+  transform: translateY(-50%);
+  width: 1.2rem;
+  height: 1.2rem;
+  border-radius: 999px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 0.68rem;
+  font-weight: 700;
+  color: #fff;
+  background: var(--plh-accent);
+}
+
+.mypage-paid-leave-help-chips {
+  margin-top: 0.55rem;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.4rem;
+}
+
+.mypage-paid-leave-help-chip {
+  display: inline-flex;
+  flex-direction: column;
+  gap: 0.08rem;
+  min-width: 4.4rem;
+  padding: 0.35rem 0.5rem;
+  border-radius: 0.6rem;
+  background: rgba(255, 255, 255, 0.9);
+  border: 1px solid color-mix(in srgb, var(--plh-accent) 22%, #e2e8f0);
+}
+
+.mypage-paid-leave-help-chip-label {
+  font-size: 0.68rem;
+  font-weight: 600;
+  color: #64748b;
+  line-height: 1.2;
+}
+
+.mypage-paid-leave-help-chip-value {
+  font-size: 0.84rem;
+  font-weight: 700;
+  color: var(--plh-accent);
+  line-height: 1.2;
+}
+
+.mypage-paid-leave-help-chip-sep {
+  color: #94a3b8;
+  font-weight: 700;
+  padding: 0 0.1rem;
+}
+
+.mypage-paid-leave-help-footer {
+  padding: 0.75rem 1.15rem 1rem;
+  background: #ffffff;
+}
+
+@media (max-width: 575.98px) {
+  .mypage-paid-leave-help-header,
+  .mypage-paid-leave-help-body,
+  .mypage-paid-leave-help-footer {
+    padding-left: 0.85rem;
+    padding-right: 0.85rem;
+  }
+
+  .mypage-paid-leave-help-card {
+    grid-template-columns: 1fr;
+  }
 }
 
 .mypage-coming-soon-badge {
