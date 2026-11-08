@@ -9,6 +9,7 @@ public record AuthUserSaveRequest(
         String email,
         List<String> roles,
         Long departmentId,
+        Long employeeId,
         Boolean enabled
 ) {
 }

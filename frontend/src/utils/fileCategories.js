@@ -4,6 +4,7 @@ export const FILE_CATEGORIES = [
   { value: 'CONTRACT', label: '契約書類' },
   { value: 'PAYROLL', label: '給与関連' },
   { value: 'APPLICATION', label: '申請書' },
+  { value: 'RESUME', label: '履歴書' },
   { value: 'OTHER', label: 'その他' },
 ];
 

@@ -291,12 +291,33 @@ public class FileAttachmentService {
 
     public void delete(long id) {
         requireWriteFilePermission();
-        FileAttachmentRecord record = repository.findActiveById(id)
-                .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "ファイルが見つかりません"));
+        softDeleteInternal(id, true);
+    }
+
+    /**
+     * 業務フローからのシステム削除（ファイル管理権限不要）。
+     * 既に削除済みなら何もしない。
+     */
+    public void softDeleteForSystem(long id) {
+        softDeleteInternal(id, false);
+    }
+
+    private void softDeleteInternal(long id, boolean requireExists) {
+        var recordOpt = repository.findActiveById(id);
+        if (recordOpt.isEmpty()) {
+            if (requireExists) {
+                throw new ResponseStatusException(HttpStatus.NOT_FOUND, "ファイルが見つかりません");
+            }
+            return;
+        }
+        FileAttachmentRecord record = recordOpt.get();
 
         String deletedAt = LocalDateTime.now(ZONE).format(TIMESTAMP);
         if (!repository.markDeleted(id, deletedAt)) {
-            throw new ResponseStatusException(HttpStatus.NOT_FOUND, "ファイルが見つかりません");
+            if (requireExists) {
+                throw new ResponseStatusException(HttpStatus.NOT_FOUND, "ファイルが見つかりません");
+            }
+            return;
         }
 
         try {

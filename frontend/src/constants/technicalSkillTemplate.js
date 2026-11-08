@@ -56,7 +56,7 @@ export const TECHNICAL_SKILL_TEMPLATE = [
       'Shell',
       'PowerShell',
       'NodeJS',
-      'Linix/Unixコマンド',
+      'Linux/Unixコマンド',
       'AngularJS',
     ],
   },
@@ -171,9 +171,24 @@ export function technicalSkillKey(category, itemName) {
   return `${category}::${itemName}`;
 }
 
-/** カテゴリ名表示用（「/」を含む名称も改行しない） */
+/** カテゴリ名表示用（「/」で折り返し） */
 export function technicalCategoryLabelParts(category) {
-  return [category];
+  const text = String(category ?? '');
+  if (text.includes('/')) {
+    return text.split('/').map((part, index, arr) =>
+      index < arr.length - 1 ? `${part}/` : part
+    );
+  }
+  return [text];
+}
+
+/** 旧テンプレ表記の互換（Linix → Linux など） */
+export function canonicalTechnicalItemName(itemName) {
+  const raw = String(itemName ?? '');
+  if (/^Linix\/Unix/i.test(raw)) {
+    return raw.replace(/^Linix/i, 'Linux');
+  }
+  return raw;
 }
 
 export function chunkItems(items, size = TECHNICAL_SKILL_COLUMNS) {
@@ -188,7 +203,11 @@ export function technicalSkillsToMap(list) {
   const map = {};
   (list || []).forEach(({ category, itemName, level }) => {
     if (category && itemName && level) {
-      map[technicalSkillKey(category, itemName)] = level;
+      const canonical = canonicalTechnicalItemName(itemName);
+      map[technicalSkillKey(category, canonical)] = level;
+      if (canonical !== itemName) {
+        map[technicalSkillKey(category, itemName)] = level;
+      }
     }
   });
   return map;

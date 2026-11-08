@@ -136,7 +136,8 @@ CREATE TABLE IF NOT EXISTS employee_hr (
     emergency_contact_name      TEXT,
     emergency_contact_phone     TEXT,
     emergency_contact_relation  TEXT,
-    paid_leave_start_date       TEXT
+    paid_leave_start_date       TEXT,
+    resignation_date            TEXT
 );
 
 -- 既存DBへの列追加（continue-on-error でスキップ可）

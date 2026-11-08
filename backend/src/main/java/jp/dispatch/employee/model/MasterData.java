@@ -6,6 +6,8 @@ public final class MasterData {
 
     public static final String HR_DEPARTMENT_NAME = "人事部";
     public static final String SALES_DEPARTMENT_NAME = "営業部";
+    public static final String ALESIS_DEPARTMENT_NAME = EmployeeCodeRules.DEPT_ALESIS;
+    public static final String SONOTA_DEPARTMENT_NAME = EmployeeCodeRules.DEPT_SONOTA;
 
     public static final List<String> POSITIONS = List.of(
             "社員",

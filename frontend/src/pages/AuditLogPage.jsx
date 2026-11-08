@@ -23,6 +23,7 @@ const ACTION_LABELS = {
   SUGGESTION_DISMISS: '状態提案無視',
   ASSIGNMENT_CANCEL: '配属取消',
   STATUS_MAINTENANCE: '状態メンテナンス',
+  MASTER_IMPORT: 'マスタ一括登録',
 };
 
 const ACTION_TONES = {
@@ -43,6 +44,7 @@ const ACTION_TONES = {
   SUGGESTION_DISMISS: 'status',
   ASSIGNMENT_CANCEL: 'project',
   STATUS_MAINTENANCE: 'status',
+  MASTER_IMPORT: 'employee',
 };
 
 function formatDateTime(value) {
@@ -63,6 +65,7 @@ function formatEntity(entityType, entityId) {
     candidate: '候補者',
     assignment: '配属',
     suggestion: '状態提案',
+    dispatch_client: '取引先',
   };
   const label = labels[entityType] || entityType;
   return entityId ? `${label} #${entityId}` : label;

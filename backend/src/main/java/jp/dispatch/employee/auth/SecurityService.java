@@ -80,9 +80,20 @@ public class SecurityService {
         );
     }
 
-    /** 案件・配属の閲覧（人事は対象外） */
+    /** 業務系ロール（一般社員のみのアカウントを除く） */
+    public boolean hasOperationalRole() {
+        return hasAnyRole(
+                AuthRoles.ADMIN,
+                AuthRoles.HR,
+                AuthRoles.DIVISION_HEAD,
+                AuthRoles.DEPT_HEAD,
+                AuthRoles.SALES_HEAD
+        );
+    }
+
+    /** 案件・配属の閲覧（人事・一般社員は対象外） */
     public boolean canViewProjectFeatures() {
-        return isAuthenticated() && !hasRole(AuthRoles.HR);
+        return hasOperationalRole() && !hasRole(AuthRoles.HR);
     }
 
     /** 案件・配属・候補者の編集（人事は対象外） */
@@ -95,9 +106,14 @@ public class SecurityService {
         );
     }
 
-    /** ファイル管理の閲覧（全ログインユーザー） */
+    /** 社員一覧・詳細などディレクトリ閲覧（業務ロール） */
+    public boolean canViewEmployeeDirectory() {
+        return hasOperationalRole();
+    }
+
+    /** ファイル管理の閲覧（業務ロール） */
     public boolean canViewFiles() {
-        return isAuthenticated();
+        return hasOperationalRole();
     }
 
     /** ファイル管理の操作（アップロード・削除） */
@@ -117,6 +133,21 @@ public class SecurityService {
 
     public boolean canManageUsers() {
         return hasRole(AuthRoles.ADMIN);
+    }
+
+    /** マスタ一括登録・出力（管理者のみ） */
+    public boolean canManageMasterData() {
+        return hasRole(AuthRoles.ADMIN);
+    }
+
+    /** 所属部門・役職・役割の変更（管理者・人事のみ。種別ごとの可否は業務ルール側で判定） */
+    public boolean canChangeEmployeeDepartmentAndRole() {
+        return hasAnyRole(AuthRoles.ADMIN, AuthRoles.HR);
+    }
+
+    /** 退社日の編集、および退職予定/退職ステータスの操作（管理者・人事） */
+    public boolean canEditResignationDate() {
+        return hasAnyRole(AuthRoles.ADMIN, AuthRoles.HR);
     }
 
     public boolean canViewClientEvents() {
@@ -148,21 +179,21 @@ public class SecurityService {
     }
 
     public boolean canViewHrOps() {
-        return isAuthenticated();
+        return canManageHrOps();
     }
 
     public boolean canManageHrOps() {
         return hasAnyRole(AuthRoles.ADMIN, AuthRoles.HR);
     }
 
-    /** 会議室予約の閲覧（全ログインユーザー） */
+    /** 会議室予約の閲覧（業務ロール） */
     public boolean canViewMeetingRooms() {
-        return isAuthenticated();
+        return hasOperationalRole();
     }
 
-    /** 会議室予約の作成・変更（全ログインユーザー） */
+    /** 会議室予約の作成・変更（業務ロール） */
     public boolean canWriteMeetingRoomReservations() {
-        return isAuthenticated();
+        return hasOperationalRole();
     }
 
     /** 会議室マスタの管理（管理者のみ） */

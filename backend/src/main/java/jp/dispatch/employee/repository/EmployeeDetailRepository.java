@@ -49,6 +49,7 @@ public class EmployeeDetailRepository {
                 emp.name(),
                 emp.departmentId(),
                 emp.departmentName(),
+                emp.affiliationCompany(),
                 emp.position(),
                 emp.assignmentRole(),
                 emp.employeeType(),
@@ -112,20 +113,33 @@ public class EmployeeDetailRepository {
         if (personal == null || isPersonalEmpty(personal)) {
             return;
         }
+        Long nationalityId = personal.nationalityId();
+        Long residenceStatusId = personal.residenceStatusId();
+        String residenceCardNumber = blankToNull(personal.residenceCardNumber());
+        String residenceCardExpiry = blankToNull(personal.residenceCardExpiry());
+        if (nationalityId == null || isJapanNationality(nationalityId)) {
+            residenceStatusId = null;
+            residenceCardNumber = null;
+            residenceCardExpiry = null;
+        }
         jdbc.update(
                 """
                 INSERT INTO employee_personal
-                    (employee_id, gender, birth_date, nationality, phone, email, address, education,
+                    (employee_id, gender, birth_date, nationality_id, residence_status_id,
+                     residence_card_number, residence_card_expiry, phone, email, address, education,
                      nearest_station, photo_url, furigana, marital_status, it_industry_years, japan_arrival_date,
                      education_degree, school_name, major, japanese_level, japanese_conversation, japanese_reading,
                      japanese_writing, english_level, english_conversation, english_reading, english_writing,
                      technical_level, specialty_dev, specialty_business, self_pr)
-                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
                 """,
                 employeeId,
                 personal.gender(),
                 blankToNull(personal.birthDate()),
-                personal.nationality(),
+                nationalityId,
+                residenceStatusId,
+                residenceCardNumber,
+                residenceCardExpiry,
                 personal.phone(),
                 personal.email(),
                 personal.address(),
@@ -155,7 +169,9 @@ public class EmployeeDetailRepository {
     }
 
     private boolean isPersonalEmpty(PersonalDto p) {
-        return isBlank(p.gender()) && isBlank(p.birthDate()) && isBlank(p.nationality())
+        return isBlank(p.gender()) && isBlank(p.birthDate()) && p.nationalityId() == null
+                && p.residenceStatusId() == null && isBlank(p.residenceCardNumber())
+                && isBlank(p.residenceCardExpiry())
                 && isBlank(p.phone()) && isBlank(p.email()) && isBlank(p.address())
                 && isBlank(p.education()) && isBlank(p.nearestStation()) && isBlank(p.photoUrl())
                 && isBlank(p.furigana()) && isBlank(p.maritalStatus()) && p.itIndustryYears() == null
@@ -586,14 +602,15 @@ public class EmployeeDetailRepository {
         jdbc.update(
                 """
                 INSERT INTO employee_hr
-                    (employee_id, hire_date, contract_start_date, contract_end_date,
+                    (employee_id, hire_date, resignation_date, contract_start_date, contract_end_date,
                      social_insurance_status, employment_insurance_no, pension_no,
                      emergency_contact_name, emergency_contact_phone, emergency_contact_relation,
                      paid_leave_start_date)
-                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
                 """,
                 employeeId,
                 blankToNull(hr.hireDate()),
+                blankToNull(hr.resignationDate()),
                 blankToNull(hr.contractStartDate()),
                 blankToNull(hr.contractEndDate()),
                 blankToNull(hr.socialInsuranceStatus()),
@@ -608,6 +625,7 @@ public class EmployeeDetailRepository {
 
     private boolean isHrEmpty(HrDto hr) {
         return isBlank(hr.hireDate())
+                && isBlank(hr.resignationDate())
                 && isBlank(hr.contractStartDate())
                 && isBlank(hr.contractEndDate())
                 && isBlank(hr.socialInsuranceStatus())
@@ -617,6 +635,15 @@ public class EmployeeDetailRepository {
                 && isBlank(hr.emergencyContactPhone())
                 && isBlank(hr.emergencyContactRelation())
                 && isBlank(hr.paidLeaveStartDate());
+    }
+
+    private boolean isJapanNationality(long nationalityId) {
+        Boolean japan = jdbc.query(
+                "SELECT is_japan FROM nationality WHERE id = ?",
+                rs -> rs.next() ? rs.getBoolean("is_japan") : null,
+                nationalityId
+        );
+        return Boolean.TRUE.equals(japan);
     }
 
     private static boolean isBlank(String value) {
@@ -630,12 +657,18 @@ public class EmployeeDetailRepository {
     private Optional<PersonalDto> findPersonal(long employeeId) {
         var list = jdbc.query(
                 """
-                SELECT gender, birth_date, nationality, phone, email, address, education, nearest_station, photo_url,
-                       furigana, marital_status, it_industry_years, japan_arrival_date, education_degree, school_name,
-                       major, japanese_level, japanese_conversation, japanese_reading, japanese_writing,
-                       english_level, english_conversation, english_reading, english_writing, technical_level,
-                       specialty_dev, specialty_business, self_pr
-                FROM employee_personal WHERE employee_id = ?
+                SELECT p.gender, p.birth_date, p.nationality_id, n.name AS nationality_name, n.is_japan AS nationality_is_japan,
+                       p.residence_status_id, rs.name AS residence_status_name,
+                       p.residence_card_number, p.residence_card_expiry,
+                       p.phone, p.email, p.address, p.education, p.nearest_station, p.photo_url,
+                       p.furigana, p.marital_status, p.it_industry_years, p.japan_arrival_date, p.education_degree, p.school_name,
+                       p.major, p.japanese_level, p.japanese_conversation, p.japanese_reading, p.japanese_writing,
+                       p.english_level, p.english_conversation, p.english_reading, p.english_writing, p.technical_level,
+                       p.specialty_dev, p.specialty_business, p.self_pr
+                FROM employee_personal p
+                LEFT JOIN nationality n ON n.id = p.nationality_id
+                LEFT JOIN residence_status rs ON rs.id = p.residence_status_id
+                WHERE p.employee_id = ?
                 """,
                 (rs, rowNum) -> {
                     String birthDate = rs.getString("birth_date");
@@ -645,11 +678,23 @@ public class EmployeeDetailRepository {
                     }
                     Integer itYears = rs.getObject("it_industry_years") != null
                             ? rs.getInt("it_industry_years") : null;
+                    Long nationalityId = rs.getObject("nationality_id") != null
+                            ? rs.getLong("nationality_id") : null;
+                    Boolean nationalityIsJapan = nationalityId != null
+                            ? rs.getBoolean("nationality_is_japan") : null;
+                    Long residenceStatusId = rs.getObject("residence_status_id") != null
+                            ? rs.getLong("residence_status_id") : null;
                     return new PersonalDto(
                             rs.getString("gender"),
                             birthDate,
                             age,
-                            rs.getString("nationality"),
+                            nationalityId,
+                            rs.getString("nationality_name"),
+                            nationalityIsJapan,
+                            residenceStatusId,
+                            rs.getString("residence_status_name"),
+                            rs.getString("residence_card_number"),
+                            rs.getString("residence_card_expiry"),
                             rs.getString("phone"),
                             rs.getString("email"),
                             rs.getString("address"),
@@ -886,7 +931,7 @@ public class EmployeeDetailRepository {
     private Optional<HrDto> findHr(long employeeId) {
         var list = jdbc.query(
                 """
-                SELECT hire_date, contract_start_date, contract_end_date,
+                SELECT hire_date, resignation_date, contract_start_date, contract_end_date,
                        social_insurance_status, employment_insurance_no, pension_no,
                        emergency_contact_name, emergency_contact_phone, emergency_contact_relation,
                        paid_leave_start_date
@@ -894,6 +939,7 @@ public class EmployeeDetailRepository {
                 """,
                 (rs, rowNum) -> new HrDto(
                         rs.getString("hire_date"),
+                        rs.getString("resignation_date"),
                         rs.getString("contract_start_date"),
                         rs.getString("contract_end_date"),
                         rs.getString("social_insurance_status"),

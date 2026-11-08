@@ -7,6 +7,7 @@ public record EmployeeDto(
         String nameKana,
         Long departmentId,
         String departmentName,
+        String affiliationCompany,
         String position,
         String assignmentRole,
         String employeeType,

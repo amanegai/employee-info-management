@@ -10,17 +10,51 @@ import AttendanceFormTab from '../components/form/tabs/AttendanceFormTab';
 import EvaluationFormTab from '../components/form/tabs/EvaluationFormTab';
 import SalaryFormTab from '../components/form/tabs/SalaryFormTab';
 import ProjectsTab from '../components/detail/tabs/ProjectsTab';
-import { EMPTY_EMPLOYEE_FORM, detailToForm, formToSavePayload, validateEmployeeCoreFields } from '../utils';
-import { canWriteSalary } from '../auth';
+import {
+  EMPTY_EMPLOYEE_FORM,
+  buildResignationSaveConfirmMessage,
+  detailToForm,
+  formToSavePayload,
+  validateEmployeeCoreFields,
+  workStatusFromResignationDate,
+} from '../utils';
+import {
+  canChangeEmployeeDepartmentAndRole,
+  canEditResignationDate,
+  canEditWorkStatus,
+  canWriteSalary,
+} from '../auth';
 import { useAuth } from '../context/AuthContext';
 import { useAppMessage } from '../context/MessageContext';
 import PageGuideHelpButton from '../components/guide/PageGuideHelpButton';
+import { formatRecommendHint, validateEmployeeCode } from '../utils/employeeCode';
+import {
+  clearEmployeeImportPrefill,
+  readEmployeeImportPrefill,
+} from '../utils/employeeImportPrefill';
+
+function resolveCreateInitial(locationState) {
+  if (locationState?.prefillForm) {
+    return {
+      form: locationState.prefillForm,
+      fromImport: Boolean(locationState.fromImport),
+    };
+  }
+  const stashed = readEmployeeImportPrefill();
+  if (stashed) {
+    return { form: stashed, fromImport: true };
+  }
+  return {
+    form: EMPTY_EMPLOYEE_FORM,
+    fromImport: Boolean(locationState?.fromImport),
+  };
+}
 
 export default function EmployeeFormPage({ mode }) {
   const { id } = useParams();
   const navigate = useNavigate();
   const location = useLocation();
-  const backPath = location.state?.from || '/';
+  const backPath = location.state?.from || '/employees';
   const backLabel = location.state?.fromLabel || '一覧に戻る';
   const navState = location.state?.from
     ? { from: location.state.from, fromLabel: location.state.fromLabel }
@@ -28,15 +62,47 @@ export default function EmployeeFormPage({ mode }) {
   const { showMessage } = useAppMessage();
   const { user } = useAuth();
   const salaryReadOnly = !canWriteSalary(user);
+  const canChangeDeptRole = canChangeEmployeeDepartmentAndRole(user);
+  const canEditResignation = canEditResignationDate(user);
   const isEdit = mode === 'edit';
 
+  const [boot] = useState(() =>
+    isEdit
+      ? { form: EMPTY_EMPLOYEE_FORM, fromImport: false }
+      : resolveCreateInitial(location.state)
+  );
   const [master, setMaster] = useState(null);
-  const [form, setForm] = useState(EMPTY_EMPLOYEE_FORM);
+  const [form, setForm] = useState(() => boot.form);
+  const [initialResignationDate, setInitialResignationDate] = useState(
+    () => boot.form?.hr?.resignationDate ?? ''
+  );
+  const [initialWorkStatus, setInitialWorkStatus] = useState(() => boot.form?.workStatus ?? '');
+  const [fromImport] = useState(() => boot.fromImport);
   const [activeTab, setActiveTab] = useState('basic');
   const [loading, setLoading] = useState(isEdit);
   const [loadError, setLoadError] = useState('');
   const [formError, setFormError] = useState('');
   const [saving, setSaving] = useState(false);
+  const [codeHint, setCodeHint] = useState('');
+  const statusEditable = canEditWorkStatus(user, initialWorkStatus || form.workStatus);
+
+  const requestCodeHint = useCallback(async (employeeType, departmentId, affiliationCompany) => {
+    if (isEdit) return;
+    if (!employeeType?.trim() || !departmentId || Number(departmentId) <= 0 || !affiliationCompany) {
+      setCodeHint('');
+      return;
+    }
+    try {
+      const recommend = await api.recommendEmployeeCode(
+        employeeType,
+        Number(departmentId),
+        affiliationCompany
+      );
+      setCodeHint(formatRecommendHint(recommend));
+    } catch {
+      setCodeHint('');
+    }
+  }, [isEdit]);
 
   useEffect(() => {
     (async () => {
@@ -44,18 +110,15 @@ export default function EmployeeFormPage({ mode }) {
         setMaster(await api.getMaster());
       } catch (e) {
         setLoadError(e.message);
-        return;
-      }
-      if (!isEdit) {
-        try {
-          const { employeeCode } = await api.getNextEmployeeCode();
-          setForm((prev) => ({ ...prev, employeeCode }));
-        } catch {
-          /* 採番 API 失敗時もフォームは利用可能 */
-        }
       }
     })();
-  }, [isEdit]);
+  }, []);
+
+  useEffect(() => {
+    if (!isEdit && form.employeeType && form.departmentId && form.affiliationCompany) {
+      void requestCodeHint(form.employeeType, form.departmentId, form.affiliationCompany);
+    }
+  }, [isEdit, form.employeeType, form.departmentId, form.affiliationCompany, requestCodeHint]);
 
   const loadEmployee = useCallback(async () => {
     if (!isEdit) return;
@@ -63,7 +126,10 @@ export default function EmployeeFormPage({ mode }) {
     setLoadError('');
     try {
       const detail = await api.getEmployeeDetail(id);
-      setForm(detailToForm(detail));
+      const nextForm = detailToForm(detail);
+      setForm(nextForm);
+      setInitialResignationDate(nextForm.hr?.resignationDate ?? '');
+      setInitialWorkStatus(nextForm.workStatus ?? '');
     } catch (e) {
       setLoadError(e.message);
     } finally {
@@ -75,8 +141,6 @@ export default function EmployeeFormPage({ mode }) {
     loadEmployee();
   }, [loadEmployee]);
 
-  const fromImport = Boolean(location.state?.fromImport);
-
   async function handleSubmit() {
     setFormError('');
     const coreError = validateEmployeeCoreFields(form);
@@ -86,15 +150,53 @@ export default function EmployeeFormPage({ mode }) {
       setActiveTab('basic');
       return;
     }
+    if (!isEdit) {
+      const dept = (master?.departments ?? []).find((d) => String(d.id) === String(form.departmentId));
+      const codeError = validateEmployeeCode(
+        form.employeeCode,
+        form.employeeType,
+        dept?.name,
+        form.affiliationCompany
+      );
+      if (codeError) {
+        showMessage(codeError, 'danger');
+        setFormError(codeError);
+        setActiveTab('basic');
+        return;
+      }
+    }
+
+    let submitForm = form;
+    const nextResignation = String(form.hr?.resignationDate ?? '').trim();
+    const prevResignation = String(initialResignationDate ?? '').trim();
+    const resignationChanged = canEditResignation && nextResignation !== prevResignation;
+    if (resignationChanged) {
+      const confirmed = window.confirm(buildResignationSaveConfirmMessage(nextResignation));
+      if (!confirmed) return;
+      if (nextResignation) {
+        const nextStatus = workStatusFromResignationDate(nextResignation);
+        if (nextStatus) {
+          submitForm = { ...form, workStatus: nextStatus };
+          setForm(submitForm);
+        }
+      }
+    }
+
     setSaving(true);
     try {
-      const payload = formToSavePayload(form);
+      const payload = formToSavePayload(submitForm);
       if (isEdit) {
         await api.updateEmployee(id, payload);
         navigate(`/employees/${id}`, { replace: true, state: navState });
       } else {
+        clearEmployeeImportPrefill();
         const created = await api.createEmployee(payload);
-        navigate(`/employees/${created.id}`, { replace: true });
+        navigate(`/employees/${created.id}`, {
+          replace: true,
+          state: fromImport
+            ? { fromImport: true, from: '/employees', fromLabel: '社員一覧に戻る' }
+            : { from: '/employees', fromLabel: '一覧に戻る' },
+        });
       }
     } catch (e) {
       showMessage(e.message, 'danger');
@@ -105,6 +207,7 @@ export default function EmployeeFormPage({ mode }) {
   }
 
   function handleCancel() {
+    clearEmployeeImportPrefill();
     if (isEdit) {
       navigate(`/employees/${id}`, { state: navState });
     } else {
@@ -116,7 +219,17 @@ export default function EmployeeFormPage({ mode }) {
     switch (activeTab) {
       case 'basic':
         return (
-          <BasicFormTab form={form} master={master} isEdit={isEdit} onChange={setForm} />
+          <BasicFormTab
+            form={form}
+            master={master}
+            isEdit={isEdit}
+            onChange={setForm}
+            codeHint={codeHint}
+            canChangeDeptRole={canChangeDeptRole}
+            canEditResignation={canEditResignation}
+            canEditStatus={statusEditable}
+            onRequestCodeHint={requestCodeHint}
+          />
         );
       case 'skills':
         return <SkillsFormTab form={form} onChange={setForm} />;
@@ -154,7 +267,7 @@ export default function EmployeeFormPage({ mode }) {
     return (
       <div className="container-fluid py-5 detail-page">
         <div className="alert alert-danger">{loadError}</div>
-        <button type="button" className="btn btn-outline-secondary app-btn" onClick={() => navigate('/')}>
+        <button type="button" className="btn btn-outline-secondary app-btn" onClick={() => navigate('/employees')}>
           <i className="bi bi-arrow-left" aria-hidden="true" />
           一覧に戻る
         </button>
@@ -185,7 +298,10 @@ export default function EmployeeFormPage({ mode }) {
           isEdit={isEdit}
           saving={saving}
           onCancel={handleCancel}
-          onBack={() => navigate(backPath)}
+          onBack={() => {
+            clearEmployeeImportPrefill();
+            navigate(backPath);
+          }}
           backLabel={backLabel}
         />
       </div>
@@ -193,7 +309,7 @@ export default function EmployeeFormPage({ mode }) {
       <div className="detail-content detail-content-panel">
         {fromImport && (
           <div className="alert alert-warning py-2 mb-3" role="status">
-            履歴書を取り込みました。社員種別・所属部門・稼働状況を入力して保存してください。
+            履歴書を取り込みました。社員ID・社員種別・所属部門を入力し、推奨番号を参考にして登録してください。
           </div>
         )}
         {formError && (

@@ -41,11 +41,56 @@ function formatYearMonth(dateStr) {
 function formatCareerDate(dateStr) {
   if (!dateStr) return '';
   const d = new Date(dateStr);
-  if (Number.isNaN(d.getTime())) return escapeHtml(dateStr);
+  if (Number.isNaN(d.getTime())) {
+    // 既に YYYY/MM/DD 形式ならそのまま（途中改行させない）
+    return escapeHtml(String(dateStr).replace(/-/g, '/'));
+  }
   const y = d.getFullYear();
   const m = String(d.getMonth() + 1).padStart(2, '0');
   const day = String(d.getDate()).padStart(2, '0');
   return `${y}/${m}/${day}`;
+}
+
+function formatItIndustryYears(value) {
+  if (value == null || value === '') return '';
+  const text = String(value).trim();
+  if (!text) return '';
+  if (/年|ヶ月|カ月|か月|月/.test(text)) return escapeHtml(text);
+  return escapeHtml(`${text}年`);
+}
+
+function splitNameKanaParts(name, kana) {
+  const nameParts = String(name ?? '')
+    .trim()
+    .split(/[\s\u3000]+/)
+    .filter(Boolean);
+  const kanaParts = String(kana ?? '')
+    .trim()
+    .split(/[\s\u3000]+/)
+    .filter(Boolean);
+  if (nameParts.length >= 2 && nameParts.length === kanaParts.length) {
+    return nameParts.map((part, index) => ({ name: part, kana: kanaParts[index] }));
+  }
+  return null;
+}
+
+function buildNameCellHtml(name, kana, kind) {
+  const parts = splitNameKanaParts(name, kana);
+  if (!parts) {
+    return kind === 'kana' ? cell(kana) : cell(name);
+  }
+  const inner = parts
+    .map((part) => {
+      const text = kind === 'kana' ? part.kana : part.name;
+      return `<span class="resume-name-col">${cell(text)}</span>`;
+    })
+    .join('');
+  return `<div class="resume-name-aligned">${inner}</div>`;
+}
+
+function careerColumnCount() {
+  // 項番 + 期間4 + 内容 + 場所 + 役割 + OS + 言語 + FW + 工程
+  return 11 + CAREER_PHASE_OPTIONS.length;
 }
 
 function careerStart(c) {
@@ -120,7 +165,7 @@ function buildPersonalHeader(employee, p) {
       </colgroup>
       <tr>
         <td class="label side">フリガナ</td>
-        <td class="value main-value center" colspan="4">${cell(p.furigana)}</td>
+        <td class="value main-value center" colspan="4">${buildNameCellHtml(employee.name, p.furigana, 'kana')}</td>
         <td class="label mini">性別</td>
         <td class="label mini">国籍</td>
         <td class="label mini">年齢</td>
@@ -128,19 +173,19 @@ function buildPersonalHeader(employee, p) {
         <td class="label wide-label">最寄駅</td>
         <td class="label wide-label">IT業界経験年数</td>
         <td class="label">来日年月</td>
-        <td class="label">日本滞在年数</td>
+        <td class="label stay-label">日本<br/>滞在年数</td>
       </tr>
       <tr>
         <td class="label side">氏　名</td>
-        <td class="value main-value name-value center" colspan="4">${cell(employee.name)}</td>
+        <td class="value main-value name-value center" colspan="4">${buildNameCellHtml(employee.name, p.furigana, 'name')}</td>
         <td class="value mini center">${cell(genderLabel(p.gender))}</td>
         <td class="value mini center">${cell(p.nationality)}</td>
         <td class="value mini center">${cell(ageLabel)}</td>
         <td class="value mini center">${cell(p.maritalStatus)}</td>
         <td class="value wide-value center">${cell(p.nearestStation)}</td>
-        <td class="value center">${p.itIndustryYears != null ? escapeHtml(p.itIndustryYears) : ''}</td>
+        <td class="value center">${formatItIndustryYears(p.itIndustryYears)}</td>
         <td class="value center">${formatYearMonth(p.japanArrivalDate)}</td>
-        <td class="value center">${formatYearsInJapan(p.japanArrivalDate)}</td>
+        <td class="value center stay-value">${formatYearsInJapan(p.japanArrivalDate)}</td>
       </tr>
       <tr>
         <td class="label side">最終学歴</td>
@@ -271,18 +316,19 @@ function buildSpecialtySection(p) {
 }
 
 function buildCareerRows(careers) {
+  const colCount = careerColumnCount();
   if (!careers?.length) {
-    return `<tr><td colspan="18" class="center empty"> </td></tr>`;
+    return `<tr><td colspan="${colCount}" class="center empty"> </td></tr>`;
   }
-  return careers
+  const rows = careers
     .map(
       (c, i) => `
-      <tr>
+      <tr class="career-data-row">
         <td class="center">${i + 1}</td>
-        <td class="center">${careerStart(c)}</td>
-        <td class="center">-</td>
-        <td class="center">${careerEnd(c)}</td>
-        <td class="center">${careerMonths(c)}</td>
+        <td class="center career-date">${careerStart(c)}</td>
+        <td class="center career-date-sep">-</td>
+        <td class="center career-date">${careerEnd(c)}</td>
+        <td class="center career-months">${careerMonths(c)}</td>
         <td class="career-content">${nl2br(c.roleOverview)}</td>
         <td class="center">${cell(c.workplace)}</td>
         <td class="center">${cell(c.role)}</td>
@@ -293,12 +339,33 @@ function buildCareerRows(careers) {
       </tr>`
     )
     .join('');
+  // 備考は tfoot にしない（印刷時に毎ページ繰り返されるため）
+  const remarks = `
+      <tr class="career-remarks-row">
+        <td class="label">備考</td>
+        <td colspan="${colCount - 1}"></td>
+      </tr>`;
+  return rows + remarks;
 }
 
 function buildCareerSection(careers) {
   return `
     <p class="role-note">＜役割＞PM：ﾏﾈｰｼﾞｬｰ、PL：ﾘｰﾀﾞｰ、SL：ｻﾌﾞﾘｰﾀﾞｰ、SE：ｼｽﾃﾑｴﾝｼﾞﾆｱ、BSE：ﾌﾞﾘｯｼﾞSE、PG：ﾌﾟﾛｸﾞﾗﾏ</p>
     <table class="sheet career-table">
+      <colgroup>
+        <col class="col-no" />
+        <col class="col-date" />
+        <col class="col-date-sep" />
+        <col class="col-date" />
+        <col class="col-months" />
+        <col class="col-content" />
+        <col class="col-place" />
+        <col class="col-role" />
+        <col class="col-os" />
+        <col class="col-lang" />
+        <col class="col-fw" />
+        ${CAREER_PHASE_OPTIONS.map(() => '<col class="col-phase" />').join('')}
+      </colgroup>
       <thead>
         <tr>
           <th rowspan="2" class="col-no">項<br/>番</th>
@@ -319,12 +386,6 @@ function buildCareerSection(careers) {
         </tr>
       </thead>
       <tbody>${buildCareerRows(careers)}</tbody>
-      <tfoot>
-        <tr>
-          <td class="label">備考</td>
-          <td colspan="17"></td>
-        </tr>
-      </tfoot>
     </table>`;
 }
 
@@ -336,6 +397,7 @@ function buildResumeHtml(employee, { embedded = false } = {}) {
     : `<div class="toolbar no-print">
     <button type="button" onclick="window.print()">印刷 / PDF保存</button>
     <button type="button" class="secondary" onclick="window.close()">閉じる</button>
+    <span class="print-hint">※印刷ダイアログで「ヘッダーとフッター」をオフにすると URL が付きません</span>
   </div>`;
 
   const bodyStyle = embedded
@@ -350,9 +412,13 @@ function buildResumeHtml(employee, { embedded = false } = {}) {
 <html lang="ja">
 <head>
   <meta charset="UTF-8" />
-  <title>技術履歴書 - ${escapeHtml(employee.name)}</title>
+  <title>${escapeHtml(resumeDocumentTitle(employee))}</title>
   <style>
     * { box-sizing: border-box; }
+    @page {
+      size: A4;
+      margin: 10mm 6mm;
+    }
     body {
       font-family: "MS PGothic", "Yu Gothic UI", "Meiryo", sans-serif;
       color: #000;
@@ -384,10 +450,10 @@ function buildResumeHtml(employee, { embedded = false } = {}) {
       --resume-side-col: 10.16%;
       --resume-main-col: 3.02%;
       --resume-xs-col: 4.25%;
-      --resume-station-col: 24.75%;
-      --resume-it-col: 20%;
-      --resume-ym-col: 7.75%;
-      --resume-stay-col: 7.75%;
+      --resume-station-col: 22.5%;
+      --resume-it-col: 18.5%;
+      --resume-ym-col: 9%;
+      --resume-stay-col: 10.76%;
       --resume-lang-conv: 14.58%;
       --resume-lang-read: 9.9%;
       --resume-lang-write: 9.9%;
@@ -434,8 +500,25 @@ function buildResumeHtml(employee, { embedded = false } = {}) {
       border: 1px solid #000;
       padding: 4px 5px;
       vertical-align: middle;
-      word-break: break-word;
+      overflow-wrap: anywhere;
       font-size: 11px;
+    }
+    .resume-name-aligned {
+      display: flex;
+      justify-content: center;
+      align-items: flex-start;
+      gap: 0.75em;
+      width: 100%;
+    }
+    .resume-name-col {
+      display: inline-block;
+      text-align: center;
+      min-width: 2em;
+    }
+    .print-hint {
+      font-size: 11px;
+      color: #666;
+      align-self: center;
     }
     table.sheet .label {
       background: #c5d9f1;
@@ -472,6 +555,17 @@ function buildResumeHtml(employee, { embedded = false } = {}) {
     }
     table.sheet .label.mini { font-size: 10px; }
     table.sheet .label.wide-label { font-size: 10px; }
+    table.header-sheet .label.stay-label {
+      white-space: normal;
+      line-height: 1.2;
+      font-size: 9px;
+      padding: 2px 2px;
+    }
+    table.header-sheet .value.stay-value {
+      white-space: nowrap;
+      font-size: 10px;
+      padding: 2px 2px;
+    }
     table.sheet .value {
       background: #fff;
       text-align: center;
@@ -585,14 +679,14 @@ function buildResumeHtml(employee, { embedded = false } = {}) {
       vertical-align: middle;
     }
     .technical-matrix .technical-cat {
-      font-size: 12px;
+      font-size: 11px;
       font-weight: 700;
       vertical-align: middle;
       white-space: normal;
-      line-height: 1.25;
+      line-height: 1.3;
       word-break: keep-all;
-      overflow-wrap: anywhere;
-      padding: 6px 3px;
+      overflow-wrap: break-word;
+      padding: 6px 2px;
       text-align: center;
     }
     .technical-matrix .technical-item-name {
@@ -633,22 +727,60 @@ function buildResumeHtml(employee, { embedded = false } = {}) {
       font-weight: 600;
       vertical-align: middle;
     }
-    .career-table .col-no { width: 3.5em; min-width: 3.5em; }
-    .career-table .col-content { width: 24%; }
-    .career-table .col-place { width: 5em; }
-    .career-table .col-role { width: 3em; }
+    .career-table .col-no { width: 2.6em; }
+    .career-table .col-date { width: 5.6em; }
+    .career-table .col-date-sep { width: 1.1em; }
+    .career-table .col-months { width: 2.2em; }
+    .career-table .col-content { width: 22%; }
+    .career-table .col-place { width: 3.5em; }
+    .career-table .col-role { width: 2.6em; }
     .career-table .col-os,
     .career-table .col-lang,
-    .career-table .col-fw { width: 8%; }
-    .career-table .col-phase { width: 2.2em; font-size: 9px; }
+    .career-table .col-fw { width: 7.5%; }
+    .career-table .col-phase { width: 1.9em; font-size: 8px; }
     .career-table td { vertical-align: top; font-size: 11px; text-align: center; }
-    .career-table .career-content { font-size: 10px; line-height: 1.4; text-align: left; }
-    .career-table .career-small { font-size: 10px; text-align: left; }
+    .career-table .career-date,
+    .career-table .career-date-sep,
+    .career-table .career-months {
+      white-space: nowrap;
+      word-break: keep-all;
+      overflow-wrap: normal;
+      font-size: 10px;
+      letter-spacing: -0.02em;
+    }
+    .career-table .career-content {
+      font-size: 10px;
+      line-height: 1.4;
+      text-align: left;
+      padding: 5px 6px;
+    }
+    .career-table .career-small {
+      font-size: 10px;
+      text-align: left;
+      white-space: pre-line;
+      word-break: keep-all;
+      overflow-wrap: break-word;
+    }
     .career-table .phase-mark { font-size: 12px; vertical-align: middle; }
+    .career-table .career-remarks-row td {
+      vertical-align: middle;
+      height: 2.2em;
+    }
+    .career-table thead {
+      display: table-header-group;
+    }
+    .career-table tbody tr.career-data-row {
+      page-break-inside: avoid;
+      break-inside: avoid;
+    }
     @media print {
       body { background: #fff; padding: 0; }
-      .toolbar { display: none !important; }
+      .toolbar, .print-hint, .no-print { display: none !important; }
       .page { box-shadow: none; padding: 0; max-width: none; }
+      .career-table tbody tr.career-data-row {
+        page-break-inside: avoid;
+        break-inside: avoid;
+      }
     }
   </style>
 </head>
@@ -682,11 +814,19 @@ function buildResumeHtml(employee, { embedded = false } = {}) {
 </html>`;
 }
 
-export { buildResumeHtml };
+function resumeDocumentTitle(employee) {
+  const code = employee.employeeCode || '';
+  const name = employee.name || '';
+  if (code && name) return `技術履歴書_${code}_${name}`;
+  if (code) return `技術履歴書_${code}`;
+  if (name) return `技術履歴書_${name}`;
+  return '技術履歴書';
+}
+
+export { buildResumeHtml, resumeDocumentTitle };
 
 function resumeFilename(employee) {
-  const code = employee.employeeCode || 'employee';
-  return `技術履歴書_${code}.html`;
+  return `${resumeDocumentTitle(employee)}.html`;
 }
 
 export function downloadEmployeeResumeHtml(employee) {

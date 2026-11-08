@@ -4,6 +4,7 @@ import {
   CAREER_PHASE_OPTIONS,
   CAREER_PHASE_ALIASES,
   EMPTY_EMPLOYEE_FORM,
+  resolveNationalityIdFromName,
   sortCareersByNewestFirst,
 } from '../utils';
 import {
@@ -21,7 +22,7 @@ const CAREER_PHASE_COLUMNS = [
   { col: 36, phase: '単体テスト' },
   { col: 37, phase: '結合テスト' },
   { col: 38, phase: '総合テスト' },
-  { col: 39, phase: '保守運用' },
+  { col: 39, phase: '保守・運用' },
 ];
 
 function isResumeSheetName(name) {
@@ -47,6 +48,8 @@ TECHNICAL_SKILL_TEMPLATE.forEach(({ category, items }) => {
 /** Excel 上の表記ゆれ → テンプレート項目名 */
 const ITEM_ALIASES = {
   swi: 'swift',
+  'linix/unixコマンド': 'Linux/Unixコマンド',
+  linixunixコマンド: 'Linux/Unixコマンド',
 };
 
 function normalizeLabel(value) {
@@ -108,6 +111,20 @@ function gridCell(grid, row, col) {
   const value = rowData[col - 1];
   if (value == null) return '';
   return value;
+}
+
+/** 「8年4ヶ月」など → DB 用の年数（整数）。月は切り捨て。 */
+function parseItIndustryYears(value) {
+  if (value == null || value === '') return '';
+  if (typeof value === 'number' && Number.isFinite(value)) {
+    return String(Math.max(0, Math.trunc(value)));
+  }
+  const text = String(value).trim();
+  if (!text) return '';
+  const matched = text.match(/(\d+)\s*年/);
+  if (matched) return matched[1];
+  if (/^\d+$/.test(text)) return text;
+  return '';
 }
 
 function gridText(grid, row, col) {
@@ -389,7 +406,7 @@ function parseCareersFromGrid(grid) {
   return sortCareersByNewestFirst(careers);
 }
 
-function parseGridResume(grid) {
+function parseGridResume(grid, nationalities = []) {
   const name = gridText(grid, 4, 4);
   if (!name) {
     throw new Error('氏名が読み取れません。技術者履歴書テンプレート（.xlsx）か確認してください');
@@ -398,6 +415,7 @@ function parseGridResume(grid) {
   const japaneseConversation = gridText(grid, 10, 4);
   const englishConversation = gridText(grid, 11, 4);
   const { readCol, writeCol } = findLanguageColumns(grid, 9);
+  const nationalityName = gridText(grid, 4, 10);
 
   return {
     ...EMPTY_EMPLOYEE_FORM,
@@ -411,12 +429,11 @@ function parseGridResume(grid) {
       ...EMPTY_EMPLOYEE_FORM.personal,
       furigana: gridText(grid, 3, 4),
       gender: gridText(grid, 4, 8),
-      nationality: gridText(grid, 4, 10),
+      nationalityId: resolveNationalityIdFromName(nationalityName, nationalities),
       birthDate: parseAgeToBirthDate(gridText(grid, 4, 12)),
       maritalStatus: gridText(grid, 4, 14),
       nearestStation: gridText(grid, 4, 16),
-      itIndustryYears:
-        gridCell(grid, 4, 25) !== '' ? String(gridCell(grid, 4, 25)) : '',
+      itIndustryYears: parseItIndustryYears(gridCell(grid, 4, 25)),
       japanArrivalDate: formatIsoDate(gridCell(grid, 4, 32)),
       educationDegree: gridText(grid, 5, 4),
       schoolName: gridText(grid, 5, 12),
@@ -442,9 +459,10 @@ function parseGridResume(grid) {
 /**
  * 技術者履歴書 Excel（.xlsx）を社員フォームデータに変換
  * @param {File} file
+ * @param {Array<{id:number,name:string}>} [nationalities]
  * @returns {Promise<object>}
  */
-export async function parseResumeXlsxToForm(file) {
+export async function parseResumeXlsxToForm(file, nationalities = []) {
   if (!file) {
     throw new Error('ファイルが選択されていません');
   }
@@ -463,5 +481,5 @@ export async function parseResumeXlsxToForm(file) {
     throw new Error('対応していない Excel 形式です。技術者履歴書テンプレート（.xlsx）をご利用ください');
   }
 
-  return parseGridResume(grid);
+  return parseGridResume(grid, nationalities);
 }

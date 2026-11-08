@@ -30,9 +30,15 @@ public class DispatchProjectRepository {
                        p.work_location, p.expected_start_date, p.expected_end_date,
                        p.headcount_required, p.headcount_filled, p.headcount_unlimited, p.project_role, p.interview_rounds, p.status,
                        p.owner_user_id, au.display_name AS owner_display_name, p.notes, p.period_notes,
+                       p.bp_help_requested, p.bp_help_requested_at, p.bp_help_requested_by,
+                       req.display_name AS bp_help_requester_name, p.bp_help_note, p.bp_help_slots_needed,
+                       p.created_by, creator.display_name AS created_by_name,
+                       NULL::integer AS pending_referral_count,
                        p.created_at, p.updated_at
                 FROM dispatch_project p
                 LEFT JOIN auth_user au ON au.id = p.owner_user_id
+                LEFT JOIN auth_user req ON req.id = p.bp_help_requested_by
+                LEFT JOIN auth_user creator ON creator.id = p.created_by
                 WHERE 1=1
                 """);
         var params = new ArrayList<Object>();
@@ -66,9 +72,15 @@ public class DispatchProjectRepository {
                        p.work_location, p.expected_start_date, p.expected_end_date,
                        p.headcount_required, p.headcount_filled, p.headcount_unlimited, p.project_role, p.interview_rounds, p.status,
                        p.owner_user_id, au.display_name AS owner_display_name, p.notes, p.period_notes,
+                       p.bp_help_requested, p.bp_help_requested_at, p.bp_help_requested_by,
+                       req.display_name AS bp_help_requester_name, p.bp_help_note, p.bp_help_slots_needed,
+                       p.created_by, creator.display_name AS created_by_name,
+                       NULL::integer AS pending_referral_count,
                        p.created_at, p.updated_at
                 FROM dispatch_project p
                 LEFT JOIN auth_user au ON au.id = p.owner_user_id
+                LEFT JOIN auth_user req ON req.id = p.bp_help_requested_by
+                LEFT JOIN auth_user creator ON creator.id = p.created_by
                 WHERE p.client_id = ?
                    OR LOWER(TRIM(p.client_name)) = LOWER(TRIM(?))
                 ORDER BY p.updated_at DESC, p.id DESC
@@ -87,9 +99,16 @@ public class DispatchProjectRepository {
                        p.work_location, p.expected_start_date, p.expected_end_date,
                        p.headcount_required, p.headcount_filled, p.headcount_unlimited, p.project_role, p.interview_rounds, p.status,
                        p.owner_user_id, au.display_name AS owner_display_name, p.notes, p.period_notes,
+                       p.bp_help_requested, p.bp_help_requested_at, p.bp_help_requested_by,
+                       req.display_name AS bp_help_requester_name, p.bp_help_note, p.bp_help_slots_needed,
+                       p.created_by, creator.display_name AS created_by_name,
+                       (SELECT COUNT(*)::integer FROM bp_help_referral r
+                         WHERE r.project_id = p.id AND r.status = 'PENDING') AS pending_referral_count,
                        p.created_at, p.updated_at
                 FROM dispatch_project p
                 LEFT JOIN auth_user au ON au.id = p.owner_user_id
+                LEFT JOIN auth_user req ON req.id = p.bp_help_requested_by
+                LEFT JOIN auth_user creator ON creator.id = p.created_by
                 WHERE p.id = ?
                 """,
                 (rs, rowNum) -> mapProjectRow(rs),
@@ -140,7 +159,8 @@ public class DispatchProjectRepository {
     public Optional<ProjectHeaderRow> findHeaderById(long id) {
         var rows = jdbc.query(
                 """
-                SELECT id, client_name, project_name, headcount_required, headcount_filled, headcount_unlimited, status
+                SELECT id, client_name, project_name, headcount_required, headcount_filled, headcount_unlimited, status,
+                       bp_help_requested
                 FROM dispatch_project
                 WHERE id = ?
                 """,
@@ -151,11 +171,81 @@ public class DispatchProjectRepository {
                         rs.getInt("headcount_required"),
                         rs.getInt("headcount_filled"),
                         rs.getBoolean("headcount_unlimited"),
-                        rs.getString("status")
+                        rs.getString("status"),
+                        rs.getBoolean("bp_help_requested")
                 ),
                 id
         );
         return rows.isEmpty() ? Optional.empty() : Optional.of(rows.getFirst());
+    }
+
+    public List<DispatchProjectDto> findOpenBpHelpRequests() {
+        return jdbc.query(
+                """
+                SELECT p.id, p.client_id, p.client_name, p.project_name, p.project_text, p.required_skills,
+                       p.optional_skills, p.billing_unit_price, p.billing_price_label,
+                       p.work_location, p.expected_start_date, p.expected_end_date,
+                       p.headcount_required, p.headcount_filled, p.headcount_unlimited, p.project_role, p.interview_rounds, p.status,
+                       p.owner_user_id, au.display_name AS owner_display_name, p.notes, p.period_notes,
+                       p.bp_help_requested, p.bp_help_requested_at, p.bp_help_requested_by,
+                       req.display_name AS bp_help_requester_name, p.bp_help_note, p.bp_help_slots_needed,
+                       p.created_by, creator.display_name AS created_by_name,
+                       (SELECT COUNT(*)::integer FROM bp_help_referral r
+                         WHERE r.project_id = p.id AND r.status = 'PENDING') AS pending_referral_count,
+                       p.created_at, p.updated_at
+                FROM dispatch_project p
+                LEFT JOIN auth_user au ON au.id = p.owner_user_id
+                LEFT JOIN auth_user req ON req.id = p.bp_help_requested_by
+                LEFT JOIN auth_user creator ON creator.id = p.created_by
+                WHERE p.bp_help_requested = TRUE
+                  AND p.status IN ('OPEN', 'PARTIALLY_FILLED')
+                ORDER BY p.bp_help_requested_at DESC NULLS LAST, p.updated_at DESC, p.id DESC
+                """,
+                (rs, rowNum) -> mapProjectRow(rs)
+        );
+    }
+
+    public int countOpenBpHelpRequests() {
+        Integer count = jdbc.queryForObject(
+                """
+                SELECT COUNT(*)
+                FROM dispatch_project
+                WHERE bp_help_requested = TRUE
+                  AND status IN ('OPEN', 'PARTIALLY_FILLED')
+                """,
+                Integer.class
+        );
+        return count == null ? 0 : count;
+    }
+
+    public void setBpHelp(
+            long id,
+            boolean requested,
+            String requestedAt,
+            Long requestedBy,
+            String note,
+            Integer slotsNeeded,
+            String now
+    ) {
+        jdbc.update(
+                """
+                UPDATE dispatch_project
+                SET bp_help_requested = ?,
+                    bp_help_requested_at = ?,
+                    bp_help_requested_by = ?,
+                    bp_help_note = ?,
+                    bp_help_slots_needed = ?,
+                    updated_at = ?
+                WHERE id = ?
+                """,
+                requested,
+                requestedAt,
+                requestedBy,
+                note,
+                slotsNeeded,
+                now,
+                id
+        );
     }
 
     public long insert(
@@ -175,6 +265,7 @@ public class DispatchProjectRepository {
             String projectRole,
             String interviewRounds,
             Long ownerUserId,
+            Long createdBy,
             String notes,
             String periodNotes,
             String now
@@ -187,8 +278,9 @@ public class DispatchProjectRepository {
                         client_id, client_name, project_name, project_text, required_skills, optional_skills,
                         billing_unit_price, billing_price_label, work_location,
                         expected_start_date, expected_end_date, headcount_required, headcount_filled, headcount_unlimited,
-                        project_role, interview_rounds, status, owner_user_id, notes, period_notes, created_at, updated_at
-                    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 0, ?, ?, ?, 'OPEN', ?, ?, ?, ?, ?)
+                        project_role, interview_rounds, status, owner_user_id, notes, period_notes,
+                        created_by, created_at, updated_at
+                    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 0, ?, ?, ?, 'OPEN', ?, ?, ?, ?, ?, ?)
                     """,
                     JdbcGeneratedKeySupport.ID_COLUMNS
             );
@@ -218,12 +310,17 @@ public class DispatchProjectRepository {
             if (ownerUserId != null) {
                 ps.setLong(16, ownerUserId);
             } else {
-                ps.setNull(16, java.sql.Types.INTEGER);
+                ps.setNull(16, java.sql.Types.BIGINT);
             }
             ps.setString(17, notes);
             ps.setString(18, periodNotes);
-            ps.setString(19, now);
+            if (createdBy != null) {
+                ps.setLong(19, createdBy);
+            } else {
+                ps.setNull(19, java.sql.Types.BIGINT);
+            }
             ps.setString(20, now);
+            ps.setString(21, now);
             return ps;
         }, keyHolder);
         return JdbcGeneratedKeySupport.requireId(keyHolder, "案件の作成に失敗しました");
@@ -362,6 +459,15 @@ public class DispatchProjectRepository {
                 rs.getString("owner_display_name"),
                 rs.getString("notes"),
                 rs.getString("period_notes"),
+                rs.getBoolean("bp_help_requested"),
+                rs.getString("bp_help_requested_at"),
+                readNullableLong(rs, "bp_help_requested_by"),
+                rs.getString("bp_help_requester_name"),
+                rs.getString("bp_help_note"),
+                readNullableInteger(rs, "bp_help_slots_needed"),
+                readNullableLong(rs, "created_by"),
+                rs.getString("created_by_name"),
+                readNullableInteger(rs, "pending_referral_count"),
                 rs.getString("created_at"),
                 rs.getString("updated_at"),
                 List.of()
@@ -385,7 +491,8 @@ public class DispatchProjectRepository {
             int headcountRequired,
             int headcountFilled,
             boolean headcountUnlimited,
-            String status
+            String status,
+            boolean bpHelpRequested
     ) {
     }
 }

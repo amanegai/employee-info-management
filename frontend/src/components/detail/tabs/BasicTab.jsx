@@ -1,3 +1,4 @@
+import AlignedJapaneseName from '../../AlignedJapaneseName';
 import SectionCard from '../SectionCard';
 import LanguageLegendNotes from '../../LanguageLegendNotes';
 import { formatJapaneseDate, formatYearsInJapan, workStatusClass, EMPTY_DISPLAY, endDateFieldLabel, assignmentRoleLabel } from '../../../utils';
@@ -26,6 +27,7 @@ function LangCell({ value }) {
 }
 export default function BasicTab({ employee }) {
   const p = employee.personal;
+  const hr = employee.hr;
   const showEndDate = employee.endDate && ['退職予定', '案件終了間近', '退職', '休業'].includes(employee.workStatus);
   const endDateLabel = endDateFieldLabel(employee.workStatus);
 
@@ -34,8 +36,7 @@ export default function BasicTab({ employee }) {
       <div className="detail-summary-card mb-3" data-guide="employee-detail-summary">
         <div className="detail-summary-hero">
           <div className="detail-summary-hero-text">
-            <h2 className="detail-employee-name">{employee.name}</h2>
-            {p?.furigana && <div className="detail-employee-kana">{p.furigana}</div>}
+            <AlignedJapaneseName name={employee.name} kana={p?.furigana} />
           </div>
           {employee.workStatus && (
             <span className={`badge status-badge detail-summary-status ${workStatusClass(employee.workStatus)}`}>
@@ -51,6 +52,9 @@ export default function BasicTab({ employee }) {
                   <InfoCell label="社員種別" value={employee.employeeType} />
                 </div>
                 <div className="col-md-4">
+                  <InfoCell label="所属会社" value={employee.affiliationCompany} />
+                </div>
+                <div className="col-md-4">
                   <InfoCell label="所属部門" value={employee.departmentName} />
                 </div>
                 <div className="col-md-4">
@@ -58,6 +62,12 @@ export default function BasicTab({ employee }) {
                 </div>
                 <div className="col-md-4">
                   <InfoCell label="役割" value={assignmentRoleLabel(employee.assignmentRole)} />
+                </div>
+                <div className="col-md-4">
+                  <InfoCell label="入社日" value={formatJapaneseDate(hr?.hireDate)} />
+                </div>
+                <div className="col-md-4">
+                  <InfoCell label="退社日" value={formatJapaneseDate(hr?.resignationDate)} />
                 </div>
                 {showEndDate && (
                   <div className="col-md-4">
@@ -102,6 +112,22 @@ export default function BasicTab({ employee }) {
               <div className="col-md-4">
                 <InfoCell label="国籍" value={p.nationality} />
               </div>
+              {p.nationalityId && p.nationalityIsJapan === false && (
+                <>
+                  <div className="col-md-4">
+                    <InfoCell label="在留資格" value={p.residenceStatus} />
+                  </div>
+                  <div className="col-md-4">
+                    <InfoCell label="在留カード番号" value={p.residenceCardNumber} />
+                  </div>
+                  <div className="col-md-4">
+                    <InfoCell
+                      label="在留カード有効期限"
+                      value={formatJapaneseDate(p.residenceCardExpiry)}
+                    />
+                  </div>
+                </>
+              )}
               <div className="col-md-4">
                 <InfoCell label="結婚" value={p.maritalStatus} />
               </div>
@@ -111,7 +137,13 @@ export default function BasicTab({ employee }) {
               <div className="col-md-4">
                 <InfoCell
                   label="IT業界経験年数"
-                  value={p.itIndustryYears != null ? `${p.itIndustryYears}年` : ''}
+                  value={
+                    p.itIndustryYears == null || p.itIndustryYears === ''
+                      ? ''
+                      : /年|月/.test(String(p.itIndustryYears))
+                        ? String(p.itIndustryYears)
+                        : `${p.itIndustryYears}年`
+                  }
                 />
               </div>
               <div className="col-md-4">

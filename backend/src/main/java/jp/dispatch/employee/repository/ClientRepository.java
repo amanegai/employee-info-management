@@ -603,6 +603,18 @@ public class ClientRepository {
         return count != null && count > 0;
     }
 
+    public boolean existsActiveName(String name) {
+        if (name == null || name.isBlank()) {
+            return false;
+        }
+        Long count = jdbc.queryForObject(
+                "SELECT COUNT(*) FROM dispatch_client WHERE deleted_at IS NULL AND TRIM(name) = TRIM(?)",
+                Long.class,
+                name.trim()
+        );
+        return count != null && count > 0;
+    }
+
     public boolean activeClientExists(long clientId) {
         Long count = jdbc.queryForObject(
                 "SELECT COUNT(*) FROM dispatch_client WHERE id = ? AND deleted_at IS NULL",

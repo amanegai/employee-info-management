@@ -5,30 +5,40 @@ import jp.dispatch.employee.auth.DataScopeService;
 import jp.dispatch.employee.auth.SecurityService;
 import jp.dispatch.employee.dto.*;
 import jp.dispatch.employee.dto.EmployeeDetailDto.AttendanceDto;
+import jp.dispatch.employee.dto.EmployeeDetailDto.PersonalDto;
 import jp.dispatch.employee.model.EvaluationCalculator.CalculationResult;
+import jp.dispatch.employee.model.AffiliationCompanies;
 import jp.dispatch.employee.model.AssignmentRoleCodes;
+import jp.dispatch.employee.model.EmployeeCodeRules;
 import jp.dispatch.employee.model.MasterData;
 import jp.dispatch.employee.model.SummaryFilter;
 import jp.dispatch.employee.repository.EmployeeDetailRepository;
 import jp.dispatch.employee.repository.EmployeeRepository;
 import jp.dispatch.employee.repository.FileAttachmentRepository;
 import jp.dispatch.employee.repository.RelatedDataCleanupRepository;
-import jp.dispatch.employee.service.HrOpsPayrollMailService;
 import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Service;
 import org.springframework.web.server.ResponseStatusException;
 
 import java.time.LocalDate;
+import java.time.ZoneId;
 import java.time.format.DateTimeFormatter;
 import java.util.ArrayList;
+import java.util.HashSet;
 import java.util.LinkedHashMap;
 import java.util.Comparator;
 import java.util.LinkedHashSet;
 import java.util.List;
+import java.util.Locale;
 import java.util.Map;
+import java.util.Objects;
+import java.util.Set;
 
 @Service
 public class EmployeeService {
+
+    private static final ZoneId TOKYO = ZoneId.of("Asia/Tokyo");
+    private static final Set<String> RESIGNATION_WORK_STATUSES = Set.of("退職予定", "退職");
 
     private final EmployeeRepository repository;
     private final EmployeeDetailRepository detailRepository;
@@ -38,6 +48,8 @@ public class EmployeeService {
     private final SecurityService securityService;
     private final DataScopeService dataScopeService;
     private final AuditLogService auditLogService;
+    private final ResumeExcelExportService resumeExcelExportService;
+    private final PaidLeaveBalanceService paidLeaveBalanceService;
 
     public EmployeeService(
             EmployeeRepository repository,
@@ -47,7 +59,9 @@ public class EmployeeService {
             EvaluationCalculationService calculationService,
             SecurityService securityService,
             DataScopeService dataScopeService,
-            AuditLogService auditLogService
+            AuditLogService auditLogService,
+            ResumeExcelExportService resumeExcelExportService,
+            PaidLeaveBalanceService paidLeaveBalanceService
     ) {
         this.repository = repository;
         this.detailRepository = detailRepository;
@@ -57,24 +71,31 @@ public class EmployeeService {
         this.securityService = securityService;
         this.dataScopeService = dataScopeService;
         this.auditLogService = auditLogService;
+        this.resumeExcelExportService = resumeExcelExportService;
+        this.paidLeaveBalanceService = paidLeaveBalanceService;
     }
 
     public SummaryDto getSummary() {
+        requireEmployeeDirectoryAccess();
         return repository.fetchSummary(dataScopeService.visibleDepartmentIdsOrNull());
     }
 
     public MasterDto getMaster() {
+        requireEmployeeDirectoryAccess();
         List<DepartmentDto> allDepartments = repository.findAllDepartments();
         return new MasterDto(
                 dataScopeService.visibleDepartments(allDepartments),
                 DepartmentFilter.excludeParentDepartments(
                         dataScopeService.assignableDepartments(allDepartments)
                 ),
+                AffiliationCompanies.ALL,
                 MasterData.POSITIONS,
                 MasterData.ASSIGNMENT_ROLES,
                 MasterData.EMPLOYEE_TYPES,
                 MasterData.WORK_STATUSES,
-                MasterData.allEvaluations()
+                MasterData.allEvaluations(),
+                repository.findAllNationalities(),
+                repository.findAllResidenceStatuses()
         );
     }
 
@@ -83,6 +104,7 @@ public class EmployeeService {
             String employeeCode,
             String name,
             Long departmentId,
+            String affiliationCompany,
             String summaryFilter,
             String skillKeyword,
             String technicalCategory,
@@ -91,17 +113,23 @@ public class EmployeeService {
             String employeeType,
             String workStatus
     ) {
+        requireEmployeeDirectoryAccess();
         if (summaryFilter != null && !summaryFilter.isBlank() && !SummaryFilter.isValid(summaryFilter)) {
             throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "サマリーフィルターが不正です");
         }
         validateSearchOption(employeeType, MasterData.EMPLOYEE_TYPES, "社員種別");
         validateSearchOption(workStatus, MasterData.WORK_STATUSES, "稼働状況");
+        if (affiliationCompany != null && !affiliationCompany.isBlank()
+                && !AffiliationCompanies.isValid(affiliationCompany.trim())) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "所属会社が不正です");
+        }
         dataScopeService.ensureSearchDepartmentAllowed(departmentId);
         List<EmployeeDto> employees = repository.search(
                 keyword,
                 employeeCode,
                 name,
                 departmentId,
+                blankToNull(affiliationCompany),
                 summaryFilter,
                 skillKeyword,
                 technicalCategory,
@@ -119,6 +147,7 @@ public class EmployeeService {
     }
 
     public EmployeeDto getById(long id) {
+        requireEmployeeDirectoryAccess();
         EmployeeDto employee = repository.findById(id)
                 .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "社員が見つかりません"));
         dataScopeService.ensureEmployeeAccessible(employee.departmentId());
@@ -128,6 +157,7 @@ public class EmployeeService {
     }
 
     public EmployeeDetailDto getDetail(long id) {
+        requireEmployeeDirectoryAccess();
         detailRepository.findDetail(id)
                 .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "社員が見つかりません"));
 
@@ -143,6 +173,11 @@ public class EmployeeService {
                 .orElse(baseDetail);
 
         return applyDetailSalaryVisibility(detail);
+    }
+
+    public ResumeExcelExportService.ResumeExcelFile exportResumeExcel(long id) {
+        EmployeeDetailDto detail = getDetail(id);
+        return resumeExcelExportService.export(detail);
     }
 
     public List<String> getAttendanceMonths(long id) {
@@ -201,6 +236,12 @@ public class EmployeeService {
         dataScopeService.ensureEmployeeAccessible(employee.departmentId());
     }
 
+    private void requireEmployeeDirectoryAccess() {
+        if (!securityService.canViewEmployeeDirectory()) {
+            throw new ResponseStatusException(HttpStatus.FORBIDDEN, "社員情報の閲覧権限がありません");
+        }
+    }
+
     private void requireViewSalary() {
         if (!securityService.canViewSalary()) {
             throw new ResponseStatusException(HttpStatus.FORBIDDEN, "給与情報の閲覧権限がありません");
@@ -220,37 +261,228 @@ public class EmployeeService {
     }
 
     public EmployeeDto create(EmployeeSaveRequest request) {
+        return insertEmployee(request, true);
+    }
+
+    /** マスタ一括登録：件ごとの監査は記録しない */
+    public EmployeeDto createFromMaster(EmployeeSaveRequest request) {
+        return insertEmployee(request, false);
+    }
+
+    private EmployeeDto insertEmployee(EmployeeSaveRequest request, boolean writeAudit) {
         requireWritePermission();
-        String employeeCode = repository.generateNextEmployeeCode();
-        EmployeeRequest req = toEmployeeRequest(request, employeeCode);
-        validate(req, null, true);
+        EmployeeSaveRequest normalized = applySalaryWritePermission(request, null);
+        normalized = applyResignationAndWorkStatusRules(normalized, null, null);
+        String employeeCode = EmployeeCodeRules.normalizeCode(normalized.employeeCode());
+        EmployeeRequest req = toEmployeeRequest(normalized, employeeCode);
+        validateNewEmployee(req, normalized.personal(), null);
         ensureDepartmentAssignable(req.departmentId());
         long id = repository.insert(req);
-        detailRepository.saveDetail(id, applySalaryWritePermission(request, null));
+        detailRepository.saveDetail(id, normalized);
         calculationService.syncEvaluation(id);
-        auditLogService.log(AuditAction.EMPLOYEE_CREATE, "employee", String.valueOf(id), req.name());
+        if (PaidLeaveBalanceService.isResignedWorkStatus(req.workStatus())) {
+            paidLeaveBalanceService.clearBalanceOnResignation(id);
+        } else {
+            paidLeaveBalanceService.reinitializeFromHireDate(id);
+        }
+        if (writeAudit) {
+            auditLogService.log(AuditAction.EMPLOYEE_CREATE, "employee", String.valueOf(id), req.name());
+        }
         return getById(id);
     }
 
-    /** 履歴書インポート用：社員種別・所属部門・稼働状況なしで下書き登録し、編集画面で必須項目を入力させる */
+    /**
+     * 退社日は管理者・人事のみ変更可。退社日がある場合は日付に応じて稼働状況を自動設定する。
+     * 退職予定/退職の手動設定・変更も管理者・人事のみ。
+     */
+    private EmployeeSaveRequest applyResignationAndWorkStatusRules(
+            EmployeeSaveRequest request,
+            Long employeeId,
+            String previousWorkStatus
+    ) {
+        EmployeeDetailDto.HrDto existingHr = null;
+        if (employeeId != null) {
+            existingHr = detailRepository.findDetail(employeeId)
+                    .map(EmployeeDetailDto::hr)
+                    .orElse(null);
+        }
+        String existingResignation = existingHr == null ? null : blankToNull(existingHr.resignationDate());
+        EmployeeDetailDto.HrDto requestedHr = request.hr();
+        String requestedResignation = requestedHr == null ? null : blankToNull(requestedHr.resignationDate());
+
+        boolean canEditResignation = securityService.canEditResignationDate();
+        if (!canEditResignation
+                && !Objects.equals(nullToEmpty(existingResignation), nullToEmpty(requestedResignation))) {
+            throw new ResponseStatusException(HttpStatus.FORBIDDEN, "退社日は人事または管理者のみ変更できます");
+        }
+
+        String nextResignation = canEditResignation ? requestedResignation : existingResignation;
+        EmployeeDetailDto.HrDto baseHr = requestedHr != null ? requestedHr : existingHr;
+        EmployeeDetailDto.HrDto nextHr = withResignationDate(baseHr, nextResignation);
+
+        String previous = nullToEmpty(previousWorkStatus);
+        String requestedStatus = nullToEmpty(request.workStatus());
+        if (!canEditResignation) {
+            if (RESIGNATION_WORK_STATUSES.contains(previous) && !previous.equals(requestedStatus)) {
+                throw new ResponseStatusException(
+                        HttpStatus.FORBIDDEN,
+                        "退職予定・退職の稼働状況は人事または管理者のみ変更できます"
+                );
+            }
+            if (RESIGNATION_WORK_STATUSES.contains(requestedStatus)) {
+                throw new ResponseStatusException(
+                        HttpStatus.FORBIDDEN,
+                        "退職予定・退職は人事または管理者のみ設定できます"
+                );
+            }
+        }
+
+        String nextStatus = requestedStatus;
+        if (canEditResignation && nextResignation != null) {
+            nextStatus = workStatusFromResignationDate(nextResignation);
+        }
+        if (nextStatus.isBlank()) {
+            nextStatus = request.workStatus();
+        }
+
+        return request.withWorkStatusAndHr(nextStatus, nextHr);
+    }
+
+    private static String workStatusFromResignationDate(String resignationDate) {
+        LocalDate today = LocalDate.now(TOKYO);
+        LocalDate date = LocalDate.parse(resignationDate);
+        return date.isAfter(today) ? "退職予定" : "退職";
+    }
+
+    private static EmployeeDetailDto.HrDto withResignationDate(EmployeeDetailDto.HrDto source, String resignationDate) {
+        if (source == null) {
+            if (resignationDate == null) {
+                return null;
+            }
+            return new EmployeeDetailDto.HrDto(
+                    null,
+                    resignationDate,
+                    null,
+                    null,
+                    null,
+                    null,
+                    null,
+                    null,
+                    null,
+                    null,
+                    null
+            );
+        }
+        return new EmployeeDetailDto.HrDto(
+                source.hireDate(),
+                resignationDate,
+                source.contractStartDate(),
+                source.contractEndDate(),
+                source.socialInsuranceStatus(),
+                source.employmentInsuranceNo(),
+                source.pensionNo(),
+                source.emergencyContactName(),
+                source.emergencyContactPhone(),
+                source.emergencyContactRelation(),
+                source.paidLeaveStartDate()
+        );
+    }
+
+    /**
+     * 履歴書インポート：社員ID・社員種別・所属部門は事前必須。
+     * 稼働状況が空の場合は待機中を既定とする。
+     */
     public EmployeeDto createFromImport(EmployeeSaveRequest request) {
         requireWritePermission();
-        String employeeCode = repository.generateNextEmployeeCode();
-        EmployeeRequest req = toEmployeeRequest(request, employeeCode);
-        validate(req, null, false);
-        if (hasDepartment(req.departmentId())) {
-            ensureDepartmentAssignable(req.departmentId());
+        String workStatus = request.workStatus();
+        if (workStatus == null || workStatus.isBlank()) {
+            workStatus = "待機中";
         }
-        long id = repository.insert(req);
-        detailRepository.saveDetail(id, applySalaryWritePermission(request, null));
-        calculationService.syncEvaluation(id);
-        auditLogService.log(AuditAction.EMPLOYEE_CREATE, "employee", String.valueOf(id), req.name());
-        return getById(id);
+        EmployeeSaveRequest normalized = new EmployeeSaveRequest(
+                request.employeeCode(),
+                request.name(),
+                request.departmentId(),
+                request.affiliationCompany(),
+                request.position(),
+                request.assignmentRole(),
+                request.employeeType(),
+                workStatus,
+                request.unitPrice(),
+                request.evaluation(),
+                request.endDate(),
+                request.personal(),
+                request.skills(),
+                request.technicalSkills(),
+                request.qualifications(),
+                request.careers(),
+                request.attendance(),
+                request.evaluationHistory(),
+                request.memo(),
+                request.evaluationItems(),
+                request.overallEvaluation(),
+                request.salary(),
+                request.hr()
+        );
+        return insertEmployee(normalized, true);
     }
 
-    public String getNextEmployeeCode() {
+    /** 社員IDが既に登録済みか */
+    public EmployeeCodeExistsDto employeeCodeExists(String code) {
         requireWritePermission();
-        return repository.generateNextEmployeeCode();
+        String normalized = EmployeeCodeRules.normalizeCode(code);
+        if (normalized.isEmpty()) {
+            return new EmployeeCodeExistsDto(false);
+        }
+        return new EmployeeCodeExistsDto(repository.codeExists(normalized, null));
+    }
+
+    /** 欠番優先の推奨社員ID（所属会社・部門・種別確定後） */
+    public NextEmployeeCodeDto recommendEmployeeCode(
+            String employeeType,
+            Long departmentId,
+            String affiliationCompany
+    ) {
+        requireWritePermission();
+        Character letter = EmployeeCodeRules.typeLetter(employeeType);
+        if (letter == null) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "社員種別を指定してください");
+        }
+        String company = AffiliationCompanies.normalize(affiliationCompany);
+        String departmentName = repository.findDepartmentNameById(departmentId)
+                .orElseThrow(() -> new ResponseStatusException(HttpStatus.BAD_REQUEST, "所属部門を指定してください"));
+        ensureDepartmentMatchesCompany(departmentId, company);
+        if (!EmployeeCodeRules.isDepartmentAllowedForType(employeeType, departmentName, company)) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "社員種別と所属部門の組み合わせが不正です");
+        }
+        String prefix = EmployeeCodeRules.requiredPrefix(company);
+        String head = EmployeeCodeRules.codePrefixForLookup(prefix, letter);
+        List<Integer> used = repository.findUsedSerials(head);
+        Set<Integer> usedSet = new HashSet<>(used);
+        int recommended = 1;
+        while (recommended <= 99999 && usedSet.contains(recommended)) {
+            recommended++;
+        }
+        if (recommended > 99999) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "この種別の社員ID枠が上限に達しています");
+        }
+        String latest = used.isEmpty()
+                ? null
+                : EmployeeCodeRules.buildCode(prefix, letter, used.stream().max(Integer::compareTo).orElse(0));
+        return new NextEmployeeCodeDto(
+                EmployeeCodeRules.buildCode(prefix, letter, recommended),
+                latest,
+                prefix,
+                String.valueOf(letter)
+        );
+    }
+
+    /** @deprecated 互換用。recommendEmployeeCode を使用 */
+    @Deprecated
+    public String getNextEmployeeCode() {
+        throw new ResponseStatusException(
+                HttpStatus.BAD_REQUEST,
+                "社員IDは手動入力です。employeeType と departmentId を指定して /employee-code/recommend を利用してください"
+        );
     }
 
     public EmployeeDto update(long id, EmployeeSaveRequest request) {
@@ -258,13 +490,170 @@ public class EmployeeService {
         EmployeeDto existing = repository.findById(id)
                 .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "社員が見つかりません"));
         dataScopeService.ensureEmployeeAccessible(existing.departmentId());
-        validate(request.toEmployeeRequest(), id, true);
-        ensureDepartmentAssignable(request.toEmployeeRequest().departmentId());
-        repository.update(id, request.toEmployeeRequest());
-        detailRepository.saveDetail(id, applySalaryWritePermission(request, id));
+
+        String previousHireDate = detailRepository.findDetail(id)
+                .map(EmployeeDetailDto::hr)
+                .map(EmployeeDetailDto.HrDto::hireDate)
+                .orElse(null);
+        String previousEmployeeType = existing.employeeType();
+
+        EmployeeSaveRequest locked = applyUpdateLocks(existing, request);
+        locked = applySalaryWritePermission(locked, id);
+        locked = applyResignationAndWorkStatusRules(locked, id, existing.workStatus());
+        EmployeeRequest req = locked.toEmployeeRequest();
+        validateUpdateEmployee(existing, req, locked.personal());
+        ensureDepartmentAssignable(req.departmentId());
+        repository.update(id, req);
+        detailRepository.saveDetail(id, locked);
         calculationService.syncEvaluation(id);
+
+        String nextHireDate = locked.hr() != null ? locked.hr().hireDate() : null;
+        String nextEmployeeType = req.employeeType();
+        String nextWorkStatus = req.workStatus();
+        boolean hireDateChanged = !Objects.equals(
+                normalizeHireDateKey(previousHireDate),
+                normalizeHireDateKey(nextHireDate)
+        );
+        boolean paidLeaveEligibilityChanged = PaidLeaveBalanceService.isEligibleEmployeeType(previousEmployeeType)
+                != PaidLeaveBalanceService.isEligibleEmployeeType(nextEmployeeType);
+        boolean becameResigned = PaidLeaveBalanceService.isResignedWorkStatus(nextWorkStatus);
+        boolean leftResigned = PaidLeaveBalanceService.isResignedWorkStatus(existing.workStatus())
+                && !becameResigned;
+        if (becameResigned) {
+            // 退職：有給台帳削除。退職予定は残す。
+            paidLeaveBalanceService.clearBalanceOnResignation(id);
+        } else if (hireDateChanged || paidLeaveEligibilityChanged || leftResigned) {
+            paidLeaveBalanceService.reinitializeFromHireDate(id);
+        }
+
         auditLogService.log(AuditAction.EMPLOYEE_UPDATE, "employee", String.valueOf(id), existing.name());
         return getById(id);
+    }
+
+    private static String normalizeHireDateKey(String raw) {
+        if (raw == null || raw.isBlank()) {
+            return null;
+        }
+        return raw.trim().replace('/', '-');
+    }
+
+    private EmployeeSaveRequest applyUpdateLocks(EmployeeDto existing, EmployeeSaveRequest request) {
+        String employeeType = existing.employeeType();
+        Long departmentId = existing.departmentId();
+        String assignmentRole = existing.assignmentRole();
+        String position = existing.position();
+
+        boolean canChangeDeptRole = securityService.canChangeEmployeeDepartmentAndRole();
+        if (canChangeDeptRole && EmployeeCodeRules.canChangeDepartment(employeeType)) {
+            departmentId = request.departmentId();
+            assignmentRole = request.assignmentRole();
+            position = request.position();
+        } else if (canChangeDeptRole) {
+            // 個人事業主/BP：部門変更不可、役職・役割のみ変更可
+            assignmentRole = request.assignmentRole();
+            position = request.position();
+        }
+
+        return new EmployeeSaveRequest(
+                existing.employeeCode(),
+                request.name(),
+                departmentId,
+                existing.affiliationCompany(),
+                position,
+                assignmentRole,
+                employeeType,
+                request.workStatus(),
+                request.unitPrice(),
+                request.evaluation(),
+                request.endDate(),
+                request.personal(),
+                request.skills(),
+                request.technicalSkills(),
+                request.qualifications(),
+                request.careers(),
+                request.attendance(),
+                request.evaluationHistory(),
+                request.memo(),
+                request.evaluationItems(),
+                request.overallEvaluation(),
+                request.salary(),
+                request.hr()
+        );
+    }
+
+    private void validateNewEmployee(EmployeeRequest req, PersonalDto personal, Long excludeId) {
+        validateNormalized(req, excludeId, true);
+        String company = AffiliationCompanies.normalize(req.affiliationCompany());
+        ensureDepartmentMatchesCompany(req.departmentId(), company);
+        String departmentName = resolveDepartmentName(req.departmentId());
+        String codeError = EmployeeCodeRules.validate(
+                req.employeeCode(), req.employeeType(), departmentName, company
+        );
+        if (codeError != null) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, codeError);
+        }
+        assertNoIdentityDuplicate(req.name(), personal, excludeId);
+    }
+
+    private void validateUpdateEmployee(EmployeeDto existing, EmployeeRequest req, PersonalDto personal) {
+        validateNormalized(req, existing.id(), true);
+        String company = AffiliationCompanies.normalize(
+                existing.affiliationCompany() != null ? existing.affiliationCompany() : req.affiliationCompany()
+        );
+        ensureDepartmentMatchesCompany(req.departmentId(), company);
+        String newDeptName = resolveDepartmentName(req.departmentId());
+        if (EmployeeCodeRules.isCrossCompanyTransfer(existing.affiliationCompany(), company)) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "所属会社は変更できません");
+        }
+        if (!EmployeeCodeRules.isDepartmentAllowedForType(req.employeeType(), newDeptName, company)) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "社員種別と所属部門の組み合わせが不正です");
+        }
+        // 社員IDは変更不可。新形式の場合のみ、部門変更後もプレフィックス整合を確認する
+        if (EmployeeCodeRules.matchesFormat(existing.employeeCode())) {
+            String codeError = EmployeeCodeRules.validate(
+                    existing.employeeCode(), req.employeeType(), newDeptName, company
+            );
+            if (codeError != null) {
+                throw new ResponseStatusException(HttpStatus.BAD_REQUEST, codeError);
+            }
+        }
+        assertNoIdentityDuplicate(req.name(), personal, existing.id());
+    }
+
+    private void ensureDepartmentMatchesCompany(Long departmentId, String affiliationCompany) {
+        String deptCompany = repository.findDepartmentCompanyById(departmentId)
+                .map(AffiliationCompanies::normalize)
+                .orElse(null);
+        if (deptCompany == null) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "所属部門が不正です");
+        }
+        if (!deptCompany.equals(AffiliationCompanies.normalize(affiliationCompany))) {
+            throw new ResponseStatusException(
+                    HttpStatus.BAD_REQUEST,
+                    "所属部門は所属会社「" + AffiliationCompanies.normalize(affiliationCompany) + "」の部門を選択してください"
+            );
+        }
+    }
+
+    private void assertNoIdentityDuplicate(String name, PersonalDto personal, Long excludeId) {
+        String gender = personal == null ? "" : nullToEmpty(personal.gender());
+        String birthDate = personal == null ? "" : nullToEmpty(personal.birthDate());
+        String arrival = personal == null ? "" : nullToEmpty(personal.japanArrivalDate());
+        if (repository.existsIdentityMatch(name, gender, birthDate, arrival, excludeId)) {
+            throw new ResponseStatusException(
+                    HttpStatus.CONFLICT,
+                    "姓名・性別・生年月日・来日年月が一致する社員が既に登録されています"
+            );
+        }
+    }
+
+    private String resolveDepartmentName(Long departmentId) {
+        return repository.findDepartmentNameById(departmentId)
+                .orElseThrow(() -> new ResponseStatusException(HttpStatus.BAD_REQUEST, "所属部門が不正です"));
+    }
+
+    private static String nullToEmpty(String value) {
+        return value == null ? "" : value.trim();
     }
 
     private EmployeeDto applyListSalaryVisibility(EmployeeDto employee) {
@@ -278,6 +667,7 @@ public class EmployeeService {
                 employee.nameKana(),
                 employee.departmentId(),
                 employee.departmentName(),
+                employee.affiliationCompany(),
                 employee.position(),
                 employee.assignmentRole(),
                 employee.employeeType(),
@@ -341,6 +731,7 @@ public class EmployeeService {
                 employee.nameKana(),
                 employee.departmentId(),
                 employee.departmentName(),
+                employee.affiliationCompany(),
                 employee.position(),
                 employee.assignmentRole(),
                 employee.employeeType(),
@@ -359,6 +750,7 @@ public class EmployeeService {
                 detail.name(),
                 detail.departmentId(),
                 detail.departmentName(),
+                detail.affiliationCompany(),
                 detail.position(),
                 detail.assignmentRole(),
                 detail.employeeType(),
@@ -390,6 +782,7 @@ public class EmployeeService {
                 employeeCode,
                 normalized.name(),
                 normalized.departmentId(),
+                normalized.affiliationCompany(),
                 normalized.position(),
                 normalized.assignmentRole(),
                 normalized.employeeType(),
@@ -405,6 +798,7 @@ public class EmployeeService {
                 req.employeeCode(),
                 req.name(),
                 EmployeeFieldNormalizer.normalizeDepartmentId(req.departmentId()),
+                AffiliationCompanies.normalize(req.affiliationCompany()),
                 EmployeeFieldNormalizer.normalizeOptionalText(req.position()),
                 AssignmentRoleCodes.normalize(req.assignmentRole()),
                 EmployeeFieldNormalizer.normalizeOptionalText(req.employeeType()),
@@ -451,6 +845,9 @@ public class EmployeeService {
     }
 
     private void validateCoreFieldsRequired(EmployeeRequest req) {
+        if (isBlank(req.affiliationCompany()) || !AffiliationCompanies.isValid(req.affiliationCompany())) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "所属会社は必須です");
+        }
         if (!hasDepartment(req.departmentId())) {
             throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "所属部門は必須です");
         }
@@ -469,6 +866,10 @@ public class EmployeeService {
         if (!MasterData.WORK_STATUSES.contains(req.workStatus())) {
             throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "稼働状況が不正です");
         }
+    }
+
+    private static String blankToNull(String value) {
+        return isBlank(value) ? null : value.trim();
     }
 
     private static void validateSearchOption(String value, List<String> allowed, String label) {

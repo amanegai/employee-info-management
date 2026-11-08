@@ -206,6 +206,7 @@ export const SUMMARY_FILTER_LABELS = {
 const EMPLOYEE_LIST_CSV_HEADERS = [
   '社員ID',
   '社員名',
+  '所属会社',
   '所属部門',
   '役職',
   '社員種別',
@@ -226,6 +227,7 @@ function buildEmployeeListCsv(employees) {
   const rows = employees.map((emp) => [
     emp.employeeCode,
     emp.name,
+    emp.affiliationCompany,
     emp.departmentName,
     emp.position,
     emp.employeeType,
@@ -523,10 +525,41 @@ export function endDateFieldLabel(workStatus) {
   return '終了予定日';
 }
 
+/**
+ * 退社日に応じた稼働状況。
+ * 当日を含む到達後は「退職」、未到達は「退職予定」。
+ */
+export function workStatusFromResignationDate(resignationDate, today = new Date()) {
+  const value = String(resignationDate ?? '').trim();
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(value)) return null;
+  const y = today.getFullYear();
+  const m = String(today.getMonth() + 1).padStart(2, '0');
+  const d = String(today.getDate()).padStart(2, '0');
+  const todayText = `${y}-${m}-${d}`;
+  return value <= todayText ? '退職' : '退職予定';
+}
+
+export function buildResignationSaveConfirmMessage(resignationDate) {
+  const nextStatus = workStatusFromResignationDate(resignationDate);
+  if (!nextStatus) {
+    return '退社日をクリアして保存します。よろしいですか？';
+  }
+  return [
+    '退社日を保存します。',
+    nextStatus === '退職'
+      ? '・退社日に到達しているため、稼働状況を「退職」に更新します。'
+      : '・退社日未到達のため、稼働状況を「退職予定」に更新します。',
+    'よろしいですか？',
+  ].join('\n');
+}
+
 const EMPTY_PERSONAL = {
   gender: '',
   birthDate: '',
-  nationality: '',
+  nationalityId: '',
+  residenceStatusId: '',
+  residenceCardNumber: '',
+  residenceCardExpiry: '',
   phone: '',
   email: '',
   address: '',
@@ -610,12 +643,13 @@ export const CAREER_PHASE_OPTIONS = [
   '単体テスト',
   '結合テスト',
   '総合テスト',
+  '保守・運用',
 ];
 
 /** 旧データ互換（履歴書出力用） */
 export const CAREER_PHASE_ALIASES = {
   実装: '製造',
-  保守運用: '総合テスト',
+  保守運用: '保守・運用',
 };
 
 export const LANGUAGE_LEVEL_OPTIONS = ['A', 'B', 'C', 'D'];
@@ -623,6 +657,28 @@ export const SKILL_MARK_OPTIONS = ['◎', '〇', '△'];
 export const TECHNICAL_SKILL_MARK_OPTIONS = SKILL_MARK_OPTIONS;
 export const MARITAL_STATUS_OPTIONS = ['未婚', '既婚'];
 export const EDUCATION_DEGREE_OPTIONS = ['学士', '修士', '博士', 'その他'];
+
+/** 国籍名からマスタIDへ変換（履歴書インポート用） */
+export function resolveNationalityIdFromName(name, nationalities = []) {
+  const text = name?.trim();
+  if (!text || !nationalities.length) return '';
+  const normalized = text.toLowerCase();
+  const aliases = {
+    日本国: '日本',
+    japan: '日本',
+    中国籍: '中国',
+    china: '中国',
+    中華人民共和国: '中国',
+    韓国籍: '韓国',
+    korea: '韓国',
+    大韓民国: '韓国',
+  };
+  const target = aliases[normalized] || aliases[text] || text;
+  const exact = nationalities.find((n) => n.name === target || n.name.toLowerCase() === normalized);
+  if (exact) return String(exact.id);
+  const other = nationalities.find((n) => n.name === 'その他');
+  return other ? String(other.id) : '';
+}
 
 const EMPTY_ATTENDANCE = {
   attendanceRate: '',
@@ -670,6 +726,7 @@ const EMPTY_SALARY = {
 
 const EMPTY_HR = {
   hireDate: '',
+  resignationDate: '',
   contractStartDate: '',
   contractEndDate: '',
   socialInsuranceStatus: '',
@@ -685,6 +742,7 @@ export const EMPTY_EMPLOYEE_FORM = {
   employeeCode: '',
   name: '',
   departmentId: '',
+  affiliationCompany: 'ビットクロス',
   position: '',
   assignmentRole: '',
   employeeType: '',
@@ -727,6 +785,7 @@ export function detailToForm(detail) {
     name: detail.name ?? '',
     departmentId:
       detail.departmentId != null && detail.departmentId > 0 ? String(detail.departmentId) : '',
+    affiliationCompany: detail.affiliationCompany ?? 'ビットクロス',
     position: detail.position ?? '',
     assignmentRole: detail.assignmentRole ?? '',
     employeeType: detail.employeeType ?? '',
@@ -738,7 +797,14 @@ export function detailToForm(detail) {
       ? {
           gender: detail.personal.gender ?? '',
           birthDate: detail.personal.birthDate ?? '',
-          nationality: detail.personal.nationality ?? '',
+          nationalityId:
+            detail.personal.nationalityId != null ? String(detail.personal.nationalityId) : '',
+          residenceStatusId:
+            detail.personal.residenceStatusId != null
+              ? String(detail.personal.residenceStatusId)
+              : '',
+          residenceCardNumber: detail.personal.residenceCardNumber ?? '',
+          residenceCardExpiry: detail.personal.residenceCardExpiry ?? '',
           phone: detail.personal.phone ?? '',
           email: detail.personal.email ?? '',
           address: detail.personal.address ?? '',
@@ -863,6 +929,7 @@ export function detailToForm(detail) {
     hr: detail.hr
       ? {
           hireDate: detail.hr.hireDate ?? '',
+          resignationDate: detail.hr.resignationDate ?? '',
           contractStartDate: detail.hr.contractStartDate ?? '',
           contractEndDate: detail.hr.contractEndDate ?? '',
           socialInsuranceStatus: detail.hr.socialInsuranceStatus ?? '',
@@ -877,9 +944,11 @@ export function detailToForm(detail) {
   };
 }
 
-/** 社員種別・所属部門・稼働状況の必須チェック（新規登録・編集保存時） */
-export function validateEmployeeCoreFields(form) {
+/** 社員種別・所属会社・所属部門・稼働状況・社員IDの必須チェック（新規登録・編集保存時） */
+export function validateEmployeeCoreFields(form, { requireEmployeeCode = true } = {}) {
   const missing = [];
+  if (requireEmployeeCode && !form.employeeCode?.trim()) missing.push('社員ID');
+  if (!form.affiliationCompany?.trim()) missing.push('所属会社');
   if (!form.employeeType?.trim()) missing.push('社員種別');
   if (!form.departmentId?.trim() || Number(form.departmentId) <= 0) missing.push('所属部門');
   if (!form.workStatus?.trim()) missing.push('稼働状況');
@@ -922,6 +991,7 @@ export function formToSavePayload(form) {
     employeeCode: withEval.employeeCode.trim(),
     name: withEval.name.trim(),
     departmentId: normalizeDepartmentId(withEval.departmentId),
+    affiliationCompany: withEval.affiliationCompany || 'ビットクロス',
     position: withEval.position || '',
     assignmentRole: withEval.assignmentRole?.trim() || null,
     employeeType: withEval.employeeType || '',
@@ -931,6 +1001,16 @@ export function formToSavePayload(form) {
     endDate: withEval.endDate || null,
     personal: {
       ...withEval.personal,
+      nationalityId:
+        withEval.personal.nationalityId !== '' && withEval.personal.nationalityId != null
+          ? Number(withEval.personal.nationalityId)
+          : null,
+      residenceStatusId:
+        withEval.personal.residenceStatusId !== '' && withEval.personal.residenceStatusId != null
+          ? Number(withEval.personal.residenceStatusId)
+          : null,
+      residenceCardNumber: withEval.personal.residenceCardNumber?.trim() || null,
+      residenceCardExpiry: withEval.personal.residenceCardExpiry || null,
       itIndustryYears:
         withEval.personal.itIndustryYears !== ''
           ? Number(withEval.personal.itIndustryYears)
@@ -989,6 +1069,7 @@ export function formToSavePayload(form) {
     },
     hr: {
       hireDate: withEval.hr?.hireDate || null,
+      resignationDate: withEval.hr?.resignationDate || null,
       contractStartDate: withEval.hr?.contractStartDate || null,
       contractEndDate: withEval.hr?.contractEndDate || null,
       socialInsuranceStatus: withEval.hr?.socialInsuranceStatus || null,
@@ -997,7 +1078,8 @@ export function formToSavePayload(form) {
       emergencyContactName: withEval.hr?.emergencyContactName || null,
       emergencyContactPhone: withEval.hr?.emergencyContactPhone || null,
       emergencyContactRelation: withEval.hr?.emergencyContactRelation || null,
-      paidLeaveStartDate: withEval.hr?.paidLeaveStartDate || null,
+      // 有給起算は入社日基準のため UI から廃止。保存時はクリアする。
+      paidLeaveStartDate: null,
     },
   };
 }

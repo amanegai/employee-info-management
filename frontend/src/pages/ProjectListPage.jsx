@@ -197,7 +197,12 @@ export default function ProjectListPage() {
                       title="クリックで詳細を表示"
                     >
                       <td className="project-list-cell-client">{project.clientName}</td>
-                      <td className="project-list-cell-name">{project.projectName}</td>
+                      <td className="project-list-cell-name">
+                        <span>{project.projectName}</span>
+                        {project.bpHelpRequested && (
+                          <span className="badge text-bg-warning ms-2" title="BP求援中">BP求援</span>
+                        )}
+                      </td>
                       <td className="project-list-cell-meta">
                         <ProjectStatusBadge status={project.status} />
                       </td>

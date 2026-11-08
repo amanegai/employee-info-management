@@ -5,15 +5,6 @@ import RecoveryCodesPanel from '../components/RecoveryCodesPanel';
 import { useAuth } from '../context/AuthContext';
 import { api } from '../api';
 
-const DEMO_ACCOUNTS = [
-  { user: 'admin', pass: 'admin123', role: '管理者・全社員' },
-  { user: 'hr', pass: 'hr123', role: '人事・全社員' },
-  { user: 'sales', pass: 'sales123', role: '営業・人事部除く全社員' },
-  { user: 'div1', pass: 'div123', role: '事業一部長・事業一部配下' },
-  { user: 'dept1', pass: 'dept123', role: '開発一部長・開発一部のみ' },
-  { user: 'user', pass: 'user123', role: '一般・全社員閲覧' },
-];
-
 function normalizeMfaVerifyInput(value) {
   const upper = value.toUpperCase();
   if (/[A-Z-]/.test(upper)) {
@@ -187,38 +178,32 @@ export default function LoginPage() {
     }
   }
 
-  function fillDemoAccount(account) {
-    resetMfaFlow();
-    setUsername(account.user);
-    setPassword(account.pass);
-  }
-
   return (
     <div className="login-page">
       <div className="login-page-bg" aria-hidden="true">
-        <span className="login-blob login-blob-1" />
-        <span className="login-blob login-blob-2" />
-        <span className="login-blob login-blob-3" />
+        <span className="login-orb login-orb-1" />
+        <span className="login-orb login-orb-2" />
+        <span className="login-grid-fade" />
       </div>
 
       <div className="login-shell">
-        <div className="login-card">
-          <aside className="login-brand-panel">
-            <div className="login-brand-content">
-              <div className="login-logo">
-                <i className="bi bi-people-fill" aria-hidden="true" />
+        <div className="login-panel">
+          <aside className="login-panel-brand">
+            <div className="login-panel-brand-inner">
+              <div className="login-panel-logo-wrap">
+                <img
+                  src="/brand/bitcross-logo.png"
+                  alt="BITCROSS"
+                  className="login-panel-logo"
+                />
               </div>
-              <div className="login-brand-heading">
-                <p className="login-brand-eyebrow">派遣会社向けプラットフォーム</p>
-                <h1 className="login-brand-title">
-                  <span className="login-brand-title-main">社員情報</span>
-                  <span className="login-brand-title-sub">管理</span>
-                </h1>
-                <p className="login-brand-tagline">
-                  Manage talent, skills, and projects in one place.
+              <div className="login-panel-product">
+                <p className="login-panel-product-name">社員情報管理</p>
+                <p className="login-panel-product-tagline">
+                  人材・スキル・案件を、ひとつの場所で。
                 </p>
               </div>
-              <ul className="login-brand-features">
+              <ul className="login-panel-points">
                 <li>
                   <i className="bi bi-check2-circle" aria-hidden="true" />
                   社員・スキル・評価を統合管理
@@ -305,31 +290,6 @@ export default function LoginPage() {
                     )}
                   </button>
                 </form>
-
-                <div className="login-demo">
-                  <div className="login-demo-head">
-                    <i className="bi bi-info-circle" aria-hidden="true" />
-                    <span>初期アカウント（初回起動時自動作成）</span>
-                  </div>
-                  <div className="login-demo-grid">
-                    {DEMO_ACCOUNTS.map((account) => (
-                      <button
-                        key={account.user}
-                        type="button"
-                        className="login-demo-item"
-                        onClick={() => fillDemoAccount(account)}
-                        title="クリックで入力欄に反映"
-                      >
-                        <span className="login-demo-credentials">
-                          <code>{account.user}</code>
-                          <span className="login-demo-sep">/</span>
-                          <code>{account.pass}</code>
-                        </span>
-                        <span className="login-demo-role">{account.role}</span>
-                      </button>
-                    ))}
-                  </div>
-                </div>
               </>
             )}
 
@@ -507,7 +467,7 @@ export default function LoginPage() {
           </div>
         </div>
 
-        <p className="login-footer-note">Copyright © 社員情報管理システム 2026</p>
+        <p className="login-footer-note">Copyright © BITCROSS 2026</p>
       </div>
     </div>
   );

@@ -50,6 +50,7 @@ public class ProjectCandidateService {
     private final SecurityService securityService;
     private final ObjectMapper objectMapper;
     private final AuditLogService auditLogService;
+    private final BpHelpNotificationService bpHelpNotificationService;
 
     @Value("${app.project-candidate.allow-direct-confirm:true}")
     private boolean allowDirectConfirm;
@@ -62,7 +63,8 @@ public class ProjectCandidateService {
             EmployeeRepository employeeRepository,
             SecurityService securityService,
             ObjectMapper objectMapper,
-            AuditLogService auditLogService
+            AuditLogService auditLogService,
+            BpHelpNotificationService bpHelpNotificationService
     ) {
         this.candidateRepository = candidateRepository;
         this.projectRepository = projectRepository;
@@ -72,6 +74,7 @@ public class ProjectCandidateService {
         this.securityService = securityService;
         this.objectMapper = objectMapper;
         this.auditLogService = auditLogService;
+        this.bpHelpNotificationService = bpHelpNotificationService;
     }
 
     public List<String> getCandidateStages() {
@@ -186,6 +189,7 @@ public class ProjectCandidateService {
         );
         candidateRepository.markLostForEmployeeExcept(candidate.employeeId(), candidateId, now);
         projectRepository.incrementHeadcountFilled(candidate.projectId(), now);
+        bpHelpNotificationService.autoCancelIfRequested(candidate.projectId());
 
         statusLogRepository.insert(
                 candidate.employeeId(),

@@ -14,6 +14,7 @@ public final class AuthMapper {
                 user.getDisplayName(),
                 user.getRoles(),
                 user.getDepartmentId(),
+                user.getEmployeeId(),
                 totpEnabled,
                 recoveryCodesRemaining
         );

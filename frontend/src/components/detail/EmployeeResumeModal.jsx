@@ -1,8 +1,12 @@
-import { useEffect, useMemo, useRef } from 'react';
-import { buildResumeHtml, downloadEmployeeResumeHtml } from '../../utils/resume';
+import { useEffect, useMemo, useRef, useState } from 'react';
+import { api } from '../../api';
+import { useAppMessage } from '../../context/MessageContext';
+import { buildResumeHtml, downloadEmployeeResumeHtml, resumeDocumentTitle } from '../../utils/resume';
 
 export default function EmployeeResumeModal({ employee, onClose }) {
   const iframeRef = useRef(null);
+  const { showMessage } = useAppMessage();
+  const [excelDownloading, setExcelDownloading] = useState(false);
   const html = useMemo(() => buildResumeHtml(employee, { embedded: true }), [employee]);
 
   useEffect(() => {
@@ -17,9 +21,33 @@ export default function EmployeeResumeModal({ employee, onClose }) {
 
   function handlePrint() {
     const win = iframeRef.current?.contentWindow;
+    const doc = iframeRef.current?.contentDocument;
     if (!win) return;
+    const title = resumeDocumentTitle(employee);
+    if (doc) doc.title = title;
+    const previousTitle = document.title;
+    document.title = title;
     win.focus();
     win.print();
+    window.setTimeout(() => {
+      document.title = previousTitle;
+    }, 500);
+  }
+
+  async function handleExcelDownload() {
+    if (!employee?.id) {
+      showMessage('社員情報を取得できません', 'danger');
+      return;
+    }
+    setExcelDownloading(true);
+    try {
+      // ファイル名は API の Content-Disposition（【会社略称】技術者履歴書_氏名.xlsx）に従う
+      await api.downloadEmployeeResumeExcel(employee.id);
+    } catch (e) {
+      showMessage(e.message || 'Excelのダウンロードに失敗しました', 'danger');
+    } finally {
+      setExcelDownloading(false);
+    }
   }
 
   return (
@@ -46,10 +74,19 @@ export default function EmployeeResumeModal({ employee, onClose }) {
                 className="employee-resume-iframe"
               />
             </div>
-            <div className="modal-footer py-2 flex-wrap gap-2">
+            <div className="modal-footer py-2 flex-wrap gap-2 align-items-center">
               <button type="button" className="btn btn-primary app-btn" onClick={handlePrint}>
                 <i className="bi bi-printer" aria-hidden="true" />
                 印刷 / PDF保存
+              </button>
+              <button
+                type="button"
+                className="btn btn-outline-success app-btn"
+                onClick={handleExcelDownload}
+                disabled={excelDownloading}
+              >
+                <i className="bi bi-file-earmark-excel" aria-hidden="true" />
+                {excelDownloading ? 'Excel出力中…' : 'Excelダウンロード'}
               </button>
               <button
                 type="button"
@@ -62,6 +99,9 @@ export default function EmployeeResumeModal({ employee, onClose }) {
               <button type="button" className="btn btn-outline-secondary app-btn" onClick={onClose}>
                 閉じる
               </button>
+              <span className="text-muted small ms-auto">
+                印刷時は「ヘッダーとフッター」をオフ推奨（URL除去）
+              </span>
             </div>
           </div>
         </div>

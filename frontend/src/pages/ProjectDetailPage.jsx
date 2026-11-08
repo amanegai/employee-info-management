@@ -7,9 +7,10 @@ import ListSectionBar from '../components/ListSectionBar';
 import ProjectCandidateTable from '../components/ProjectCandidateTable';
 import ProjectStatusBadge from '../components/ProjectStatusBadge';
 import ProjectInfoSummaryModal from '../components/detail/ProjectInfoSummaryModal';
-import { canWriteProjectFeatures } from '../auth';
+import { canControlBpHelp, canWriteProjectFeatures } from '../auth';
 import { useAuth } from '../context/AuthContext';
 import { useAppMessage } from '../context/MessageContext';
+import BpHelpReferralPanel from '../components/BpHelpReferralPanel';
 import {
   candidateStageLabel,
   formatProjectBillingPrice,
@@ -111,16 +112,48 @@ export default function ProjectDetailPage() {
   const [confirmError, setConfirmError] = useState('');
   const [saving, setSaving] = useState(false);
   const [showProjectSummary, setShowProjectSummary] = useState(false);
+  const [bpHelpNote, setBpHelpNote] = useState('');
+  const [bpHelpSlots, setBpHelpSlots] = useState('');
+  const [bpHelpSaving, setBpHelpSaving] = useState(false);
 
   const loadProject = useCallback(async () => {
     setLoading(true);
     try {
       const data = await api.getProject(id);
       setProject(data);
+      setBpHelpNote(data.bpHelpNote || '');
+      setBpHelpSlots(
+        data.bpHelpSlotsNeeded != null && data.bpHelpSlotsNeeded !== undefined
+          ? String(data.bpHelpSlotsNeeded)
+          : ''
+      );
+      if (data.bpHelpRequested) {
+        try {
+          await api.markProjectNotificationsRead(id);
+        } catch {
+          /* ignore */
+        }
+      }
     } catch (e) {
       showMessage(e.message, 'danger');
     } finally {
       setLoading(false);
+    }
+  }, [id, showMessage]);
+
+  /** 既に画面表示中のとき用。スピナーで画面を潰さず人数／ステータス／候補者を取り直す */
+  const refreshProjectQuietly = useCallback(async () => {
+    try {
+      const data = await api.getProject(id);
+      setProject(data);
+      setBpHelpNote(data.bpHelpNote || '');
+      setBpHelpSlots(
+        data.bpHelpSlotsNeeded != null && data.bpHelpSlotsNeeded !== undefined
+          ? String(data.bpHelpSlotsNeeded)
+          : ''
+      );
+    } catch (e) {
+      showMessage(e.message, 'danger');
     }
   }, [id, showMessage]);
 
@@ -198,6 +231,42 @@ export default function ProjectDetailPage() {
     }
   }
 
+  async function handleRequestBpHelp() {
+    if (!window.confirm('社内要員が不足しているため、他の営業へBP求援を出しますか？\n通知がリアルタイムで配信されます。')) {
+      return;
+    }
+    setBpHelpSaving(true);
+    try {
+      const slots = bpHelpSlots.trim() ? Number(bpHelpSlots) : null;
+      const updated = await api.requestBpHelp(project.id, {
+        note: bpHelpNote.trim() || null,
+        slotsNeeded: Number.isFinite(slots) && slots > 0 ? slots : null,
+      });
+      setProject(updated);
+      showMessage('BP求援を公開し、他の営業へ通知しました');
+    } catch (e) {
+      showMessage(e.message, 'danger');
+    } finally {
+      setBpHelpSaving(false);
+    }
+  }
+
+  async function handleCancelBpHelp() {
+    if (!window.confirm('BP求援を終了しますか？関連する未読通知も閉じます。')) return;
+    setBpHelpSaving(true);
+    try {
+      const updated = await api.cancelBpHelp(project.id);
+      setProject(updated);
+      setBpHelpNote('');
+      setBpHelpSlots('');
+      showMessage('BP求援を終了しました');
+    } catch (e) {
+      showMessage(e.message, 'danger');
+    } finally {
+      setBpHelpSaving(false);
+    }
+  }
+
   if (loading) {
     return (
       <div className="container-fluid py-4 px-3 px-lg-5">
@@ -225,6 +294,7 @@ export default function ProjectDetailPage() {
   const optionalSkills = parseProjectSkills(project.optionalSkills);
   const periodDuration = formatPeriodDuration(project.expectedStartDate, project.expectedEndDate);
   const canMatch = isMatchableProject(project.status);
+  const canOperateBpHelp = canControlBpHelp(user, project);
 
   function handleOpenMatch() {
     navigate('/project-match', {
@@ -480,6 +550,92 @@ export default function ProjectDetailPage() {
               )}
             </div>
           </div>
+        </div>
+      </section>
+
+      <section className={`table-section list-section-panel mt-3 bp-help-panel${project.bpHelpRequested ? ' is-active' : ''}`}>
+        <ListSectionBar
+          icon="bi-people"
+          title="BP求援"
+          hideCount
+        />
+        <div className="list-section-body list-section-body-padded">
+          {project.bpHelpRequested ? (
+            <div className="bp-help-active-banner mb-3">
+              <i className="bi bi-broadcast" aria-hidden="true" />
+              <div>
+                <strong>求援公開中</strong>
+                <div className="small text-muted">
+                  依頼者: {project.bpHelpRequesterName || '—'}
+                  {project.bpHelpRequestedAt ? ` / ${formatDateTime(project.bpHelpRequestedAt)}` : ''}
+                  {project.bpHelpSlotsNeeded != null ? ` / 不足 ${project.bpHelpSlotsNeeded}名` : ''}
+                </div>
+                {project.bpHelpNote && <div className="mt-1">{project.bpHelpNote}</div>}
+              </div>
+            </div>
+          ) : (
+            <p className="text-muted small mb-3">
+              社内マッチングで人員が足りない・適者がいない場合、他の営業へBP候補の協力を依頼できます。依頼すると通知ベルとBP求援一覧に表示されます。
+            </p>
+          )}
+          {canOperateBpHelp && canMatch && (
+            <div className="row g-2 align-items-end">
+              <div className="col-md-2">
+                <label className="form-label small mb-1" htmlFor="bp-help-slots">不足人数</label>
+                <input
+                  id="bp-help-slots"
+                  type="number"
+                  min="1"
+                  className="form-control form-control-sm"
+                  value={bpHelpSlots}
+                  onChange={(e) => setBpHelpSlots(e.target.value)}
+                  placeholder="例: 2"
+                  disabled={bpHelpSaving}
+                />
+              </div>
+              <div className="col-md-6">
+                <label className="form-label small mb-1" htmlFor="bp-help-note">依頼メモ</label>
+                <input
+                  id="bp-help-note"
+                  type="text"
+                  className="form-control form-control-sm"
+                  value={bpHelpNote}
+                  onChange={(e) => setBpHelpNote(e.target.value)}
+                  placeholder="例: Java経験3年以上、来月開始希望"
+                  disabled={bpHelpSaving}
+                />
+              </div>
+              <div className="col-md-4 d-flex flex-wrap gap-2">
+                <button
+                  type="button"
+                  className="btn btn-warning btn-sm app-btn"
+                  disabled={bpHelpSaving}
+                  onClick={handleRequestBpHelp}
+                >
+                  <i className="bi bi-megaphone" aria-hidden="true" />
+                  {project.bpHelpRequested ? '求援を更新して再通知' : 'BP求援を出す'}
+                </button>
+                {project.bpHelpRequested && (
+                  <button
+                    type="button"
+                    className="btn btn-outline-secondary btn-sm app-btn"
+                    disabled={bpHelpSaving}
+                    onClick={handleCancelBpHelp}
+                  >
+                    求援を終了
+                  </button>
+                )}
+              </div>
+            </div>
+          )}
+          {!canOperateBpHelp && project.bpHelpRequested && (
+            <p className="small mb-0 text-muted">協力会社から候補が得られたら、下の臨時候補から履歴書を提出してください。</p>
+          )}
+          <BpHelpReferralPanel
+            project={project}
+            enabled={Boolean(project.bpHelpRequested)}
+            onProjectChanged={refreshProjectQuietly}
+          />
         </div>
       </section>
 

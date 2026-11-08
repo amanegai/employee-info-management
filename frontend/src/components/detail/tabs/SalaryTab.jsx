@@ -239,16 +239,10 @@ export default function SalaryTab({ employee, active = true }) {
         {hr ? (
           <div className="row g-3">
             <div className="col-md-6 col-lg-3">
-              <InfoCell label="入社日" value={formatJapaneseDate(hr.hireDate)} />
-            </div>
-            <div className="col-md-6 col-lg-3">
               <InfoCell label="契約開始日" value={formatJapaneseDate(hr.contractStartDate)} />
             </div>
             <div className="col-md-6 col-lg-3">
               <InfoCell label="契約終了日" value={formatJapaneseDate(hr.contractEndDate)} />
-            </div>
-            <div className="col-md-6 col-lg-3">
-              <InfoCell label="有給起算日" value={formatJapaneseDate(hr.paidLeaveStartDate)} />
             </div>
             <div className="col-md-6 col-lg-3">
               <InfoCell label="社会保険" value={hr.socialInsuranceStatus} />

@@ -15,10 +15,50 @@ import {
   excludeParentDepartments,
   assignmentRoleLabel,
 } from '../../../utils';
+import {
+  AFFILIATION_COMPANIES,
+  EMPLOYEE_TYPE_LETTER,
+  filterDepartmentsForEmployeeType,
+  canChangeEmployeeDepartment,
+} from '../../../utils/employeeCode';
+import { RESIGNATION_WORK_STATUSES } from '../../../auth';
 
-export default function BasicFormTab({ form, master, isEdit, onChange }) {
+export default function BasicFormTab({
+  form,
+  master,
+  isEdit,
+  onChange,
+  codeHint = '',
+  canChangeDeptRole = false,
+  canEditResignation = false,
+  canEditStatus = true,
+  onRequestCodeHint,
+}) {
   const showEndDate = NEEDS_END_DATE.includes(form.workStatus);
   const endDateLabel = endDateFieldLabel(form.workStatus);
+  const workStatusOptions = useMemo(() => {
+    const all = master?.workStatuses ?? [];
+    const filtered = canEditResignation
+      ? all
+      : all.filter((s) => !RESIGNATION_WORK_STATUSES.includes(s));
+    // 権限なしでも現在値が退職系なら表示用に残す（変更は canEditStatus で抑止）
+    if (
+      form.workStatus &&
+      RESIGNATION_WORK_STATUSES.includes(form.workStatus) &&
+      !filtered.includes(form.workStatus)
+    ) {
+      return [...filtered, form.workStatus];
+    }
+    return filtered;
+  }, [canEditResignation, form.workStatus, master?.workStatuses]);
+  const lockType = isEdit;
+  const lockDepartment = isEdit && (!canChangeDeptRole || !canChangeEmployeeDepartment(form.employeeType));
+  const lockAssignmentRole = isEdit && !canChangeDeptRole;
+  const lockPosition = isEdit && !canChangeDeptRole;
+
+  const companyOptions = master?.affiliationCompanies?.length
+    ? master.affiliationCompanies
+    : AFFILIATION_COMPANIES;
 
   const departmentOptions = useMemo(() => {
     const base = excludeParentDepartments(
@@ -26,16 +66,84 @@ export default function BasicFormTab({ form, master, isEdit, onChange }) {
       master?.departments ??
       []
     );
-    if (!isEdit || !form.departmentId) return base;
+    const filtered = filterDepartmentsForEmployeeType(
+      base,
+      form.employeeType,
+      form.affiliationCompany
+    );
+    if (!isEdit || !form.departmentId) return filtered;
     const id = Number(form.departmentId);
-    if (!Number.isFinite(id) || id <= 0 || base.some((d) => d.id === id)) return base;
+    if (!Number.isFinite(id) || id <= 0 || filtered.some((d) => d.id === id)) return filtered;
     const current = (master?.departments ?? []).find((d) => d.id === id);
-    return current ? [...base, current] : base;
-  }, [form.departmentId, isEdit, master]);
+    return current ? [...filtered, current] : filtered;
+  }, [form.affiliationCompany, form.departmentId, form.employeeType, isEdit, master]);
 
   function updatePersonal(field, value) {
     onChange({ ...form, personal: { ...form.personal, [field]: value } });
   }
+
+  function updateHr(field, value) {
+    onChange({ ...form, hr: { ...form.hr, [field]: value } });
+  }
+
+  function syncDepartmentForCompany(nextForm) {
+    const allowed = filterDepartmentsForEmployeeType(
+      excludeParentDepartments(master?.assignableDepartments ?? master?.departments ?? []),
+      nextForm.employeeType,
+      nextForm.affiliationCompany
+    );
+    const currentOk = allowed.some((d) => String(d.id) === String(nextForm.departmentId));
+    if (currentOk) return nextForm;
+    return {
+      ...nextForm,
+      departmentId: allowed[0] ? String(allowed[0].id) : '',
+    };
+  }
+
+  function handleAffiliationCompanyChange(affiliationCompany) {
+    if (isEdit) return;
+    const next = syncDepartmentForCompany({ ...form, affiliationCompany });
+    onChange(next);
+    onRequestCodeHint?.(next.employeeType, next.departmentId, next.affiliationCompany);
+  }
+
+  function handleEmployeeTypeChange(employeeType) {
+    const next = syncDepartmentForCompany({ ...form, employeeType });
+    onChange(next);
+    onRequestCodeHint?.(next.employeeType, next.departmentId, next.affiliationCompany);
+  }
+
+  function handleDepartmentChange(departmentId) {
+    onChange({ ...form, departmentId });
+    onRequestCodeHint?.(form.employeeType, departmentId, form.affiliationCompany);
+  }
+
+  function updateNationality(nationalityId) {
+    const selected = (master?.nationalities ?? []).find((n) => String(n.id) === String(nationalityId));
+    const isJapan = selected?.isJapan === true;
+    onChange({
+      ...form,
+      personal: {
+        ...form.personal,
+        nationalityId: nationalityId || '',
+        ...(isJapan || !nationalityId
+          ? {
+              residenceStatusId: '',
+              residenceCardNumber: '',
+              residenceCardExpiry: '',
+            }
+          : {}),
+      },
+    });
+  }
+
+  const selectedNationality = useMemo(() => {
+    const id = form.personal.nationalityId;
+    if (!id) return null;
+    return (master?.nationalities ?? []).find((n) => String(n.id) === String(id)) ?? null;
+  }, [form.personal.nationalityId, master]);
+
+  const showResidenceFields = Boolean(selectedNationality && !selectedNationality.isJapan);
 
   return (
     <>
@@ -68,11 +176,17 @@ export default function BasicFormTab({ form, master, isEdit, onChange }) {
               className="form-select detail-form-hero-status-select"
               required
               value={form.workStatus}
+              disabled={!canEditStatus}
               onChange={(e) => onChange({ ...form, workStatus: e.target.value })}
               aria-label="稼働状況"
+              title={
+                !canEditStatus
+                  ? '退職予定・退職の稼働状況は人事または管理者のみ変更できます'
+                  : undefined
+              }
             >
               <option value="">{EMPTY_DISPLAY}</option>
-              {master?.workStatuses.map((s) => (
+              {workStatusOptions.map((s) => (
                 <option key={s} value={s}>
                   {s}
                 </option>
@@ -88,16 +202,44 @@ export default function BasicFormTab({ form, master, isEdit, onChange }) {
                   <FormField
                     label="社員ID"
                     htmlFor="employeeCode"
-                    hint={isEdit ? '変更不可' : '自動採番'}
+                    required={!isEdit}
+                    hint={
+                      isEdit
+                        ? '変更不可'
+                        : codeHint ||
+                          'btc/als/swt + 種別英字(S/K/P/B) + 5桁（例：btcS00001）／S正社員 K契約 P個人 B=BP'
+                    }
                   >
                     <input
                       id="employeeCode"
                       type="text"
                       className="form-control"
-                      readOnly
-                      placeholder={isEdit ? '' : '採番中…'}
+                      required={!isEdit}
+                      readOnly={isEdit}
+                      placeholder={isEdit ? '' : '例：btcS00001'}
                       value={form.employeeCode}
+                      onChange={(e) => onChange({ ...form, employeeCode: e.target.value.trim() })}
+                      autoComplete="off"
                     />
+                  </FormField>
+                </div>
+                <div className="col-md-4">
+                  <FormField label="所属会社" htmlFor="affiliationCompany" required>
+                    <select
+                      id="affiliationCompany"
+                      className="form-select"
+                      required
+                      disabled={isEdit}
+                      value={form.affiliationCompany || ''}
+                      onChange={(e) => handleAffiliationCompanyChange(e.target.value)}
+                    >
+                      <option value="">{EMPTY_DISPLAY}</option>
+                      {companyOptions.map((c) => (
+                        <option key={c} value={c}>
+                          {c}
+                        </option>
+                      ))}
+                    </select>
                   </FormField>
                 </div>
                 <div className="col-md-4">
@@ -106,13 +248,14 @@ export default function BasicFormTab({ form, master, isEdit, onChange }) {
                       id="employeeType"
                       className="form-select"
                       required
+                      disabled={lockType}
                       value={form.employeeType}
-                      onChange={(e) => onChange({ ...form, employeeType: e.target.value })}
+                      onChange={(e) => handleEmployeeTypeChange(e.target.value)}
                     >
                       <option value="">{EMPTY_DISPLAY}</option>
                       {master?.employeeTypes.map((t) => (
                         <option key={t} value={t}>
-                          {t}
+                          {EMPLOYEE_TYPE_LETTER[t] ? `${t}（${EMPLOYEE_TYPE_LETTER[t]}）` : t}
                         </option>
                       ))}
                     </select>
@@ -124,8 +267,9 @@ export default function BasicFormTab({ form, master, isEdit, onChange }) {
                       id="departmentId"
                       className="form-select"
                       required
+                      disabled={lockDepartment}
                       value={form.departmentId}
-                      onChange={(e) => onChange({ ...form, departmentId: e.target.value })}
+                      onChange={(e) => handleDepartmentChange(e.target.value)}
                     >
                       <option value="">{EMPTY_DISPLAY}</option>
                       {departmentOptions.map((d) => (
@@ -141,6 +285,7 @@ export default function BasicFormTab({ form, master, isEdit, onChange }) {
                     <select
                       id="position"
                       className="form-select"
+                      disabled={lockPosition}
                       value={form.position}
                       onChange={(e) => onChange({ ...form, position: e.target.value })}
                     >
@@ -158,6 +303,7 @@ export default function BasicFormTab({ form, master, isEdit, onChange }) {
                     <select
                       id="assignmentRole"
                       className="form-select"
+                      disabled={lockAssignmentRole}
                       value={form.assignmentRole}
                       onChange={(e) => onChange({ ...form, assignmentRole: e.target.value })}
                     >
@@ -168,6 +314,33 @@ export default function BasicFormTab({ form, master, isEdit, onChange }) {
                         </option>
                       ))}
                     </select>
+                  </FormField>
+                </div>
+                <div className="col-md-4">
+                  <FormField label="入社日" htmlFor="hireDate">
+                    <input
+                      id="hireDate"
+                      type="date"
+                      className="form-control"
+                      value={form.hr?.hireDate ?? ''}
+                      onChange={(e) => updateHr('hireDate', e.target.value)}
+                    />
+                  </FormField>
+                </div>
+                <div className="col-md-4">
+                  <FormField
+                    label="退社日"
+                    htmlFor="resignationDate"
+                    hint={canEditResignation ? '' : '人事・管理者のみ編集可'}
+                  >
+                    <input
+                      id="resignationDate"
+                      type="date"
+                      className="form-control"
+                      value={form.hr?.resignationDate ?? ''}
+                      disabled={!canEditResignation}
+                      onChange={(e) => updateHr('resignationDate', e.target.value)}
+                    />
                   </FormField>
                 </div>
                 {showEndDate && (
@@ -227,16 +400,65 @@ export default function BasicFormTab({ form, master, isEdit, onChange }) {
             </FormField>
           </div>
           <div className="col-md-4">
-            <FormField label="国籍" htmlFor="nationality">
-              <input
-                id="nationality"
-                type="text"
-                className="form-control"
-                value={form.personal.nationality}
-                onChange={(e) => updatePersonal('nationality', e.target.value)}
-              />
+            <FormField label="国籍" htmlFor="nationalityId">
+              <select
+                id="nationalityId"
+                className="form-select"
+                value={form.personal.nationalityId}
+                onChange={(e) => updateNationality(e.target.value)}
+              >
+                <option value="">{EMPTY_DISPLAY}</option>
+                {(master?.nationalities ?? []).map((n) => (
+                  <option key={n.id} value={String(n.id)}>
+                    {n.name}
+                  </option>
+                ))}
+              </select>
             </FormField>
           </div>
+          {showResidenceFields && (
+            <>
+              <div className="col-md-4">
+                <FormField label="在留資格" htmlFor="residenceStatusId">
+                  <select
+                    id="residenceStatusId"
+                    className="form-select"
+                    value={form.personal.residenceStatusId}
+                    onChange={(e) => updatePersonal('residenceStatusId', e.target.value)}
+                  >
+                    <option value="">{EMPTY_DISPLAY}</option>
+                    {(master?.residenceStatuses ?? []).map((s) => (
+                      <option key={s.id} value={String(s.id)}>
+                        {s.name}
+                      </option>
+                    ))}
+                  </select>
+                </FormField>
+              </div>
+              <div className="col-md-4">
+                <FormField label="在留カード番号" htmlFor="residenceCardNumber">
+                  <input
+                    id="residenceCardNumber"
+                    type="text"
+                    className="form-control"
+                    value={form.personal.residenceCardNumber}
+                    onChange={(e) => updatePersonal('residenceCardNumber', e.target.value)}
+                  />
+                </FormField>
+              </div>
+              <div className="col-md-4">
+                <FormField label="在留カード有効期限" htmlFor="residenceCardExpiry">
+                  <input
+                    id="residenceCardExpiry"
+                    type="date"
+                    className="form-control"
+                    value={form.personal.residenceCardExpiry}
+                    onChange={(e) => updatePersonal('residenceCardExpiry', e.target.value)}
+                  />
+                </FormField>
+              </div>
+            </>
+          )}
           <div className="col-md-4">
             <FormField label="結婚" htmlFor="maritalStatus">
               <select

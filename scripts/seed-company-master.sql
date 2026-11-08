@@ -18,7 +18,9 @@ INSERT INTO department (id, name, parent_id) VALUES
 (7, '事業二部・開発二部', 5),
 (8, '事業二部・開発三部', 5),
 (9, '営業部', NULL),
-(10, '人事部', NULL);
+(10, '人事部', NULL),
+(11, 'アレシス', NULL),
+(12, 'その他', NULL);
 
 SELECT setval(pg_get_serial_sequence('department', 'id'), (SELECT COALESCE(MAX(id), 1) FROM department));
 

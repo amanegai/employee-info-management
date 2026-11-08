@@ -14,15 +14,21 @@ import ClientEventProtectedRoute from './components/ClientEventProtectedRoute';
 import ClientRecordProtectedRoute from './components/ClientRecordProtectedRoute';
 import ClientWriteProtectedRoute from './components/ClientWriteProtectedRoute';
 import HrOpsProtectedRoute from './components/HrOpsProtectedRoute';
+import EmployeeDirectoryProtectedRoute from './components/EmployeeDirectoryProtectedRoute';
+import FilesProtectedRoute from './components/FilesProtectedRoute';
+import MeetingRoomProtectedRoute from './components/MeetingRoomProtectedRoute';
 
 const LoginPage = lazy(() => import('./pages/LoginPage'));
+const MyPagePage = lazy(() => import('./pages/MyPagePage'));
 const EmployeeListPage = lazy(() => import('./pages/EmployeeListPage'));
 const EmployeeDetailPage = lazy(() => import('./pages/EmployeeDetailPage'));
 const EmployeeFormPage = lazy(() => import('./pages/EmployeeFormPage'));
+const ResumeImportConfirmPage = lazy(() => import('./pages/ResumeImportConfirmPage'));
 const ProjectMatchPage = lazy(() => import('./pages/ProjectMatchPage'));
 const ProjectListPage = lazy(() => import('./pages/ProjectListPage'));
 const ProjectDetailPage = lazy(() => import('./pages/ProjectDetailPage'));
 const ProjectFormPage = lazy(() => import('./pages/ProjectFormPage'));
+const BpHelpRequestsPage = lazy(() => import('./pages/BpHelpRequestsPage'));
 const EmployeeStatusSuggestionsPage = lazy(() => import('./pages/EmployeeStatusSuggestionsPage'));
 const AssignmentCancelFollowupsPage = lazy(() => import('./pages/AssignmentCancelFollowupsPage'));
 const ClientEventPage = lazy(() => import('./pages/ClientEventPage'));
@@ -32,6 +38,7 @@ const ClientRecordFormPage = lazy(() => import('./pages/ClientRecordFormPage'));
 const UserManagementPage = lazy(() => import('./pages/UserManagementPage'));
 const AccountSecurityPage = lazy(() => import('./pages/AccountSecurityPage'));
 const AuditLogPage = lazy(() => import('./pages/AuditLogPage'));
+const MasterImportPage = lazy(() => import('./pages/MasterImportPage'));
 const FileManagementPage = lazy(() => import('./pages/FileManagementPage'));
 const ClientListPage = lazy(() => import('./pages/ClientListPage'));
 const ClientDetailPage = lazy(() => import('./pages/ClientDetailPage'));
@@ -87,14 +94,28 @@ function AppRoutes() {
         <Route path="/login" element={<LoginPage />} />
         <Route element={<ProtectedRoute />}>
           <Route element={<AppLayout />}>
-            <Route path="/" element={<EmployeeListPage />} />
+            <Route path="/" element={<MyPagePage />} />
+            <Route element={<EmployeeDirectoryProtectedRoute />}>
+              <Route path="/employees" element={<EmployeeListPage />} />
+              <Route element={<WriteProtectedRoute />}>
+                <Route path="/employees/new" element={<EmployeeFormPage mode="create" />} />
+                <Route path="/employees/:id/edit" element={<EmployeeFormPage mode="edit" />} />
+                <Route path="/employees/import/confirm" element={<ResumeImportConfirmPage />} />
+              </Route>
+              <Route path="/employees/:id" element={<EmployeeDetailPage />} />
+            </Route>
             <Route element={<ProjectFeatureProtectedRoute />}>
               <Route path="/project-match" element={<ProjectMatchPage />} />
               <Route path="/projects" element={<ProjectListPage />} />
               <Route path="/projects/:id" element={<ProjectDetailPage />} />
+              <Route path="/bp-help-requests" element={<BpHelpRequestsPage />} />
             </Route>
-            <Route path="/files" element={<FileManagementPage />} />
-            <Route path="/meeting-rooms" element={<MeetingRoomCalendarPage />} />
+            <Route element={<FilesProtectedRoute />}>
+              <Route path="/files" element={<FileManagementPage />} />
+            </Route>
+            <Route element={<MeetingRoomProtectedRoute />}>
+              <Route path="/meeting-rooms" element={<MeetingRoomCalendarPage />} />
+            </Route>
             <Route element={<ProjectWriteProtectedRoute />}>
               <Route path="/projects/new" element={<ProjectFormPage mode="create" />} />
               <Route path="/projects/:id/edit" element={<ProjectFormPage mode="edit" />} />
@@ -200,15 +221,11 @@ function AppRoutes() {
               <Route path="/hr-ops/offboarding" element={<HrOpsPlaceholderPage businessId="offboarding" />} />
               <Route path="/hr-ops/other" element={<HrOpsPlaceholderPage businessId="other" />} />
             </Route>
-            <Route path="/employees/:id" element={<EmployeeDetailPage />} />
             <Route path="/account/security" element={<AccountSecurityPage />} />
-            <Route element={<WriteProtectedRoute />}>
-              <Route path="/employees/new" element={<EmployeeFormPage mode="create" />} />
-              <Route path="/employees/:id/edit" element={<EmployeeFormPage mode="edit" />} />
-            </Route>
             <Route element={<AdminProtectedRoute />}>
               <Route path="/users" element={<UserManagementPage />} />
               <Route path="/admin/audit-logs" element={<AuditLogPage />} />
+              <Route path="/admin/master-import" element={<MasterImportPage />} />
             </Route>
           </Route>
         </Route>

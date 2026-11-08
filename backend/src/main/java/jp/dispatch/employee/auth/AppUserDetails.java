@@ -14,6 +14,7 @@ public class AppUserDetails implements UserDetails {
     private final String passwordHash;
     private final String displayName;
     private final Long departmentId;
+    private final Long employeeId;
     private final boolean enabled;
     private final List<String> roles;
 
@@ -23,6 +24,7 @@ public class AppUserDetails implements UserDetails {
             String passwordHash,
             String displayName,
             Long departmentId,
+            Long employeeId,
             boolean enabled,
             List<String> roles
     ) {
@@ -31,6 +33,7 @@ public class AppUserDetails implements UserDetails {
         this.passwordHash = passwordHash;
         this.displayName = displayName;
         this.departmentId = departmentId;
+        this.employeeId = employeeId;
         this.enabled = enabled;
         this.roles = roles;
     }
@@ -45,6 +48,10 @@ public class AppUserDetails implements UserDetails {
 
     public Long getDepartmentId() {
         return departmentId;
+    }
+
+    public Long getEmployeeId() {
+        return employeeId;
     }
 
     public List<String> getRoles() {

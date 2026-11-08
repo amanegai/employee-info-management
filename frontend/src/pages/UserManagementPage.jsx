@@ -25,10 +25,17 @@ const EMPTY_FORM = {
   email: '',
   role: 'DEPT_HEAD',
   departmentId: '',
+  employeeId: '',
+  employeeLabel: '',
+  employeeCodeQuery: '',
   enabled: true,
 };
 
 function userToForm(user) {
+  const linked =
+    user.employeeId != null
+      ? `${user.employeeCode || ''} ${user.employeeName || ''}`.trim()
+      : '';
   return {
     username: user.username,
     password: '',
@@ -36,6 +43,9 @@ function userToForm(user) {
     email: user.email || '',
     role: user.roles?.[0] || 'DEPT_HEAD',
     departmentId: user.departmentId != null ? String(user.departmentId) : '',
+    employeeId: user.employeeId != null ? String(user.employeeId) : '',
+    employeeLabel: linked,
+    employeeCodeQuery: '',
     enabled: user.enabled,
   };
 }
@@ -51,6 +61,7 @@ export default function UserManagementPage() {
   const [editingUser, setEditingUser] = useState(null);
   const [form, setForm] = useState(EMPTY_FORM);
   const [passwordVisible, setPasswordVisible] = useState(false);
+  const [employeeLookupLoading, setEmployeeLookupLoading] = useState(false);
 
   const departmentMode = useMemo(() => roleDepartmentMode(form.role), [form.role]);
   const fixedDepartmentName = useMemo(() => roleFixedDepartmentName(form.role), [form.role]);
@@ -79,6 +90,45 @@ export default function UserManagementPage() {
       departmentId = id != null ? String(id) : '';
     }
     setForm((prev) => ({ ...prev, role, departmentId }));
+  }
+
+  async function handleEmployeeLookup() {
+    const code = form.employeeCodeQuery.trim();
+    if (!code) {
+      showMessage('社員番号を入力してください', 'warning');
+      return;
+    }
+    setEmployeeLookupLoading(true);
+    try {
+      const list = await api.searchEmployees({ employeeCode: code });
+      const exact = (list ?? []).find(
+        (emp) => String(emp.employeeCode).toLowerCase() === code.toLowerCase()
+      );
+      if (!exact) {
+        showMessage(`社員番号「${code}」は見つかりませんでした`, 'danger');
+        return;
+      }
+      setForm((prev) => ({
+        ...prev,
+        employeeId: String(exact.id),
+        employeeLabel: `${exact.employeeCode} ${exact.name}`,
+        employeeCodeQuery: '',
+      }));
+      showMessage(`「${exact.employeeCode} ${exact.name}」を連携しました`);
+    } catch (err) {
+      showMessage(err.message, 'danger');
+    } finally {
+      setEmployeeLookupLoading(false);
+    }
+  }
+
+  function clearEmployeeLink() {
+    setForm((prev) => ({
+      ...prev,
+      employeeId: '',
+      employeeLabel: '',
+      employeeCodeQuery: '',
+    }));
   }
 
   const loadData = useCallback(async () => {
@@ -129,6 +179,7 @@ export default function UserManagementPage() {
         email: form.email.trim(),
         roles: [form.role],
         departmentId: resolveDepartmentIdForRole(form.role, form.departmentId, departments),
+        employeeId: form.employeeId ? Number(form.employeeId) : null,
         enabled: form.enabled,
       };
       if (form.password.trim()) {
@@ -180,6 +231,10 @@ export default function UserManagementPage() {
         title="ユーザー管理"
         lead="ログインアカウントと権限の管理"
       >
+        <Link to="/admin/master-import" className="btn btn-outline-secondary app-btn">
+          <i className="bi bi-database-up" aria-hidden="true" />
+          マスタ一括登録
+        </Link>
         <Link to="/admin/audit-logs" className="btn btn-outline-secondary app-btn">
           <i className="bi bi-journal-text" aria-hidden="true" />
           監査ログ
@@ -219,6 +274,7 @@ export default function UserManagementPage() {
                   <th>メール</th>
                   <th>ロール</th>
                   <th>所属部門</th>
+                  <th>連携社員</th>
                   <th>2FA</th>
                   <th>状態</th>
                   <th>操作</th>
@@ -279,6 +335,19 @@ export default function UserManagementPage() {
                             <>
                               <i className="bi bi-building user-mgmt-dept-icon" aria-hidden="true" />
                               {user.departmentName}
+                            </>
+                          ) : (
+                            '—'
+                          )}
+                        </span>
+                      </td>
+                      <td>
+                        <span className={user.employeeId ? 'user-mgmt-dept' : 'user-mgmt-empty'}>
+                          {user.employeeId ? (
+                            <>
+                              <i className="bi bi-person-badge user-mgmt-dept-icon" aria-hidden="true" />
+                              {user.employeeCode || '—'}
+                              {user.employeeName ? ` ${user.employeeName}` : ''}
                             </>
                           ) : (
                             '—'
@@ -574,6 +643,54 @@ export default function UserManagementPage() {
                             )}
                           </div>
                         )}
+                        <div className="user-form-field" style={{ gridColumn: '1 / -1' }}>
+                          <label htmlFor="userEmployeeCode" className="form-label user-form-label">
+                            連携社員（MyPage）
+                            <span className="user-form-label-optional">任意</span>
+                          </label>
+                          {form.employeeId ? (
+                            <div className="user-form-dept-binding" aria-label="連携社員">
+                              <span className="user-form-dept-binding-dept">
+                                <i className="bi bi-person-badge" aria-hidden="true" />
+                                {form.employeeLabel || form.employeeId}
+                              </span>
+                              <button
+                                type="button"
+                                className="btn btn-sm btn-outline-secondary ms-2"
+                                onClick={clearEmployeeLink}
+                              >
+                                解除
+                              </button>
+                            </div>
+                          ) : (
+                            <div className="d-flex gap-2">
+                              <div className="user-form-input-wrap flex-grow-1">
+                                <i className="bi bi-search user-form-input-icon" aria-hidden="true" />
+                                <input
+                                  id="userEmployeeCode"
+                                  type="text"
+                                  className="form-control user-form-input-with-icon"
+                                  value={form.employeeCodeQuery}
+                                  onChange={(e) =>
+                                    setForm({ ...form, employeeCodeQuery: e.target.value })
+                                  }
+                                  placeholder="社員番号で検索（例: btcS00001）"
+                                />
+                              </div>
+                              <button
+                                type="button"
+                                className="btn btn-outline-primary app-btn"
+                                onClick={handleEmployeeLookup}
+                                disabled={employeeLookupLoading}
+                              >
+                                {employeeLookupLoading ? '検索中…' : '検索'}
+                              </button>
+                            </div>
+                          )}
+                          <p className="user-form-role-hint mb-0 mt-1">
+                            一般社員ロールでは MyPage 表示のため連携を推奨します。業務ロールでも連携できます。
+                          </p>
+                        </div>
                         {departmentMode === 'select' && (
                           <div className="user-form-field user-form-field-animated">
                             <label htmlFor="userDepartment" className="form-label user-form-label">

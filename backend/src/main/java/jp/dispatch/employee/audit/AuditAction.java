@@ -25,6 +25,7 @@ public final class AuditAction {
     public static final String FILE_UPLOAD = "FILE_UPLOAD";
     public static final String FILE_DELETE = "FILE_DELETE";
     public static final String CLIENT_CREATE = "CLIENT_CREATE";
+    public static final String MASTER_IMPORT = "MASTER_IMPORT";
     public static final String CLIENT_UPDATE = "CLIENT_UPDATE";
     public static final String CLIENT_DELETE = "CLIENT_DELETE";
     public static final String HR_OPS_CLIENT_MAIL = "HR_OPS_CLIENT_MAIL";
