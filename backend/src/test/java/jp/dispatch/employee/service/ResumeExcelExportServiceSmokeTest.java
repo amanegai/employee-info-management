@@ -60,7 +60,8 @@ class ResumeExcelExportServiceSmokeTest {
                                 "製造"
                         )
                 ),
-                null, null, null, List.of(), null, null, null, List.of(), null, false
+                null, null, null, List.of(), null, null, null, List.of(), null, false,
+                1, null, null
         );
 
         ResumeExcelExportService.ResumeExcelFile file = new ResumeExcelExportService().export(detail);
