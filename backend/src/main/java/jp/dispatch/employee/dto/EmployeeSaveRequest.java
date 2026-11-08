@@ -28,7 +28,8 @@ public record EmployeeSaveRequest(
         List<EvaluationItemSaveDto> evaluationItems,
         OverallEvaluationDto overallEvaluation,
         SalaryDto salary,
-        HrDto hr
+        HrDto hr,
+        Integer version
 ) {
     public record EvaluationItemSaveDto(
             String categoryCode,
@@ -78,7 +79,8 @@ public record EmployeeSaveRequest(
                 evaluationItems,
                 overallEvaluation,
                 null,
-                null
+                null,
+                version
         );
     }
 
@@ -106,7 +108,8 @@ public record EmployeeSaveRequest(
                 evaluationItems,
                 overallEvaluation,
                 salary,
-                hr
+                hr,
+                version
         );
     }
 
@@ -134,7 +137,8 @@ public record EmployeeSaveRequest(
                 evaluationItems,
                 overallEvaluation,
                 salary,
-                hr
+                hr,
+                version
         );
     }
 }

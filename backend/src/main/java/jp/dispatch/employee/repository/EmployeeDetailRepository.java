@@ -71,7 +71,10 @@ public class EmployeeDetailRepository {
                 findHr(employeeId).orElse(null),
                 findMonthlyExpenses(employeeId),
                 null,
-                false
+                false,
+                emp.version(),
+                emp.updatedAt(),
+                emp.updatedByName()
         ));
     }
 

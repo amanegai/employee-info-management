@@ -15,6 +15,7 @@ const TYPE_ICONS = {
   BP_HELP_REFERRAL_INTERVIEW: { icon: 'bi-calendar-check-fill', tone: 'cyan' },
   BP_HELP_REFERRAL_HIRED: { icon: 'bi-award-fill', tone: 'green' },
   BP_HELP_REFERRAL_CLOSED: { icon: 'bi-archive-fill', tone: 'slate' },
+  PROJECT_FILLED_CLOSE_REMIND: { icon: 'bi-flag-fill', tone: 'amber' },
 };
 
 function typeVisual(type) {

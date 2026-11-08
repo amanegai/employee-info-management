@@ -378,7 +378,8 @@ public class MasterImportService {
                 base.evaluationItems(),
                 base.overallEvaluation(),
                 base.salary(),
-                base.hr()
+                base.hr(),
+                base.version()
         );
     }
 
@@ -646,6 +647,7 @@ public class MasterImportService {
                 null,
                 null,
                 List.of(),
+                null,
                 null,
                 null,
                 null

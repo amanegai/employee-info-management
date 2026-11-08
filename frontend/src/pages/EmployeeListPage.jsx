@@ -65,6 +65,7 @@ export default function EmployeeListPage() {
   const [employees, setEmployees] = useState([]);
   const [filters, setFilters] = useState(EMPTY_FILTERS);
   const [summaryFilter, setSummaryFilter] = useState(null);
+  const [summaryCompany, setSummaryCompany] = useState(null);
   const [searchExpanded, setSearchExpanded] = useState(false);
   const [summaryLoading, setSummaryLoading] = useState(true);
   const [listLoading, setListLoading] = useState(true);
@@ -221,19 +222,29 @@ export default function EmployeeListPage() {
     setRecentImportIds(successIds.length ? successIds : null);
     setFilters(EMPTY_FILTERS);
     setSummaryFilter(null);
+    setSummaryCompany(null);
     skipSearchEffectRef.current = true;
     loadSummary();
     loadEmployees(EMPTY_FILTERS, null);
     navigate(location.pathname, { replace: true, state: null });
   }, [location.pathname, location.state, user, filters, summaryFilter, loadSummary, loadEmployees, navigate]);
 
-  function handleSummaryFilterClick(filterValue) {
-    const nextFilter = summaryFilter === filterValue ? null : filterValue;
+  function handleSummaryFilterClick(filterValue, companyFilter = null) {
+    const same =
+      summaryFilter === filterValue &&
+      (summaryCompany || null) === (companyFilter || null);
+    const nextFilter = same ? null : filterValue;
+    const nextCompany = same ? null : companyFilter || null;
     setRecentImportIds(null);
-    setFilters(EMPTY_FILTERS);
+    const nextFilters = {
+      ...EMPTY_FILTERS,
+      affiliationCompany: nextCompany || '',
+    };
+    setFilters(nextFilters);
     setSummaryFilter(nextFilter);
+    setSummaryCompany(nextCompany);
     skipSearchEffectRef.current = true;
-    loadEmployees(EMPTY_FILTERS, nextFilter);
+    loadEmployees(nextFilters, nextFilter);
   }
 
   function handleExportCsv() {
@@ -440,6 +451,7 @@ export default function EmployeeListPage() {
           summary={summary}
           loading={summaryLoading}
           activeFilter={summaryFilter}
+          activeCompany={summaryCompany}
           onFilterClick={handleSummaryFilterClick}
         />
       </div>
@@ -549,6 +561,7 @@ export default function EmployeeListPage() {
                     setRecentImportIds(null);
                     setFilters(EMPTY_FILTERS);
                     setSummaryFilter(null);
+                    setSummaryCompany(null);
                     skipSearchEffectRef.current = true;
                     loadEmployees(EMPTY_FILTERS, null);
                   }}

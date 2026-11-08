@@ -1,6 +1,7 @@
 package jp.dispatch.employee.config;
 
 import jp.dispatch.employee.auth.AuthRoles;
+import jp.dispatch.employee.model.AffiliationCompanies;
 import jp.dispatch.employee.repository.AuthUserRepository;
 import jp.dispatch.employee.repository.EmployeeRepository;
 import org.springframework.boot.ApplicationArguments;
@@ -53,6 +54,7 @@ public class AuthEmployeeUserInitializer implements ApplicationRunner {
                 "一般社員(テスト)",
                 null,
                 null,
+                AffiliationCompanies.BITCROSS,
                 employeeId,
                 List.of(AuthRoles.EMPLOYEE)
         );

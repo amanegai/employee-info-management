@@ -179,6 +179,87 @@ public class DispatchProjectRepository {
         return rows.isEmpty() ? Optional.empty() : Optional.of(rows.getFirst());
     }
 
+    public Optional<FilledCloseRemindRow> findFilledCloseRemindById(long id) {
+        var rows = jdbc.query(
+                """
+                SELECT id, client_name, project_name, status, owner_user_id, created_by,
+                       filled_reached_at, filled_close_remind_count, filled_close_next_at
+                FROM dispatch_project
+                WHERE id = ?
+                """,
+                (rs, rowNum) -> mapFilledCloseRemindRow(rs),
+                id
+        );
+        return rows.isEmpty() ? Optional.empty() : Optional.of(rows.getFirst());
+    }
+
+    public List<FilledCloseRemindRow> findDueFilledCloseReminders(String now, int maxRemindCount) {
+        return jdbc.query(
+                """
+                SELECT id, client_name, project_name, status, owner_user_id, created_by,
+                       filled_reached_at, filled_close_remind_count, filled_close_next_at
+                FROM dispatch_project
+                WHERE status = 'FILLED'
+                  AND filled_close_next_at IS NOT NULL
+                  AND TRIM(filled_close_next_at) <> ''
+                  AND filled_close_next_at <= ?
+                  AND filled_close_remind_count < ?
+                ORDER BY filled_close_next_at ASC, id ASC
+                """,
+                (rs, rowNum) -> mapFilledCloseRemindRow(rs),
+                now,
+                maxRemindCount
+        );
+    }
+
+    public void updateFilledCloseRemindSchedule(
+            long id,
+            String filledReachedAt,
+            int remindCount,
+            String nextAt
+    ) {
+        jdbc.update(
+                """
+                UPDATE dispatch_project
+                SET filled_reached_at = ?,
+                    filled_close_remind_count = ?,
+                    filled_close_next_at = ?
+                WHERE id = ?
+                """,
+                filledReachedAt,
+                remindCount,
+                nextAt,
+                id
+        );
+    }
+
+    public void clearFilledCloseRemindSchedule(long id) {
+        jdbc.update(
+                """
+                UPDATE dispatch_project
+                SET filled_reached_at = NULL,
+                    filled_close_remind_count = 0,
+                    filled_close_next_at = NULL
+                WHERE id = ?
+                """,
+                id
+        );
+    }
+
+    private static FilledCloseRemindRow mapFilledCloseRemindRow(java.sql.ResultSet rs) throws java.sql.SQLException {
+        return new FilledCloseRemindRow(
+                rs.getLong("id"),
+                rs.getString("client_name"),
+                rs.getString("project_name"),
+                rs.getString("status"),
+                readNullableLong(rs, "owner_user_id"),
+                readNullableLong(rs, "created_by"),
+                rs.getString("filled_reached_at"),
+                rs.getInt("filled_close_remind_count"),
+                rs.getString("filled_close_next_at")
+        );
+    }
+
     public List<DispatchProjectDto> findOpenBpHelpRequests() {
         return jdbc.query(
                 """
@@ -493,6 +574,19 @@ public class DispatchProjectRepository {
             boolean headcountUnlimited,
             String status,
             boolean bpHelpRequested
+    ) {
+    }
+
+    public record FilledCloseRemindRow(
+            long id,
+            String clientName,
+            String projectName,
+            String status,
+            Long ownerUserId,
+            Long createdBy,
+            String filledReachedAt,
+            int filledCloseRemindCount,
+            String filledCloseNextAt
     ) {
     }
 }
