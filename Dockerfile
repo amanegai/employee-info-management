@@ -17,7 +17,7 @@ RUN apt-get update \
     && apt-get install -y --no-install-recommends dos2unix \
     && dos2unix mvnw \
     && chmod +x mvnw \
-    && ./mvnw -q clean package -DskipTests \
+    && ./mvnw -q clean package -Dmaven.test.skip=true \
     && apt-get purge -y dos2unix \
     && apt-get autoremove -y \
     && rm -rf /var/lib/apt/lists/*
