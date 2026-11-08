@@ -1,6 +1,7 @@
 package jp.dispatch.employee.config;
 
 import jp.dispatch.employee.auth.AuthRoles;
+import jp.dispatch.employee.model.AffiliationCompanies;
 import jp.dispatch.employee.repository.AuthUserRepository;
 import org.springframework.boot.ApplicationArguments;
 import org.springframework.boot.ApplicationRunner;
@@ -63,6 +64,8 @@ public class AuthScopeUserInitializer implements ApplicationRunner {
                 displayName,
                 null,
                 departmentId,
+                AffiliationCompanies.BITCROSS,
+                null,
                 roles
         );
     }

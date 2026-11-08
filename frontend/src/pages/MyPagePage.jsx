@@ -1,21 +1,81 @@
 import { useEffect, useState } from 'react';
-import { Link, useNavigate } from 'react-router-dom';
+import { Link } from 'react-router-dom';
 import { api } from '../api';
 import AlignedJapaneseName from '../components/AlignedJapaneseName';
 import AppFooter from '../components/AppFooter';
 import PageHeader from '../components/PageHeader';
+import SummaryCards from '../components/SummaryCards';
 import { useAppMessage } from '../context/MessageContext';
-import { EMPTY_DISPLAY, SUMMARY_FILTERS, workStatusClass } from '../utils';
+import { EMPTY_DISPLAY } from '../utils';
 
-function InfoCell({ label, value }) {
+function InfoCell({ label, value, labelAction = null }) {
   const empty = value == null || value === '';
   return (
     <div className="detail-info-cell">
-      <div className="detail-info-label">{label}</div>
+      <div className="detail-info-label mypage-info-label-row">
+        <span>{label}</span>
+        {labelAction}
+      </div>
       <div className={`detail-info-value${empty ? ' is-empty' : ''}`}>
         {empty ? EMPTY_DISPLAY : value}
       </div>
     </div>
+  );
+}
+
+function PaidLeaveHelpModal({ open, onClose }) {
+  if (!open) return null;
+  return (
+    <>
+      <div
+        className="modal fade show d-block"
+        tabIndex={-1}
+        role="dialog"
+        aria-modal="true"
+        aria-labelledby="paidLeaveHelpModalTitle"
+      >
+        <div className="modal-dialog modal-dialog-centered modal-dialog-scrollable">
+          <div className="modal-content">
+            <div className="modal-header py-2">
+              <h2 className="modal-title fs-6" id="paidLeaveHelpModalTitle">
+                有給について
+              </h2>
+              <button type="button" className="btn-close" aria-label="閉じる" onClick={onClose} />
+            </div>
+            <div className="modal-body">
+              <dl className="mypage-paid-leave-help-list mb-0">
+                <div className="mypage-paid-leave-help-item">
+                  <dt>対象</dt>
+                  <dd>正社員</dd>
+                </div>
+                <div className="mypage-paid-leave-help-item">
+                  <dt>起算</dt>
+                  <dd>入社日。初回付与＝入社日＋6か月；以降は毎年同日</dd>
+                </div>
+                <div className="mypage-paid-leave-help-item">
+                  <dt>日数</dt>
+                  <dd>6か月10日 → … → 6年6か月以降は上限20日</dd>
+                </div>
+                <div className="mypage-paid-leave-help-item">
+                  <dt>残数</dt>
+                  <dd>今年度残／前年度残。新付与時、今年度の未使用分は前年度へ繰越し</dd>
+                </div>
+                <div className="mypage-paid-leave-help-item">
+                  <dt>消滅</dt>
+                  <dd>付与日から2年経過で自動クリア</dd>
+                </div>
+              </dl>
+            </div>
+            <div className="modal-footer py-2">
+              <button type="button" className="btn btn-primary app-btn" onClick={onClose}>
+                閉じる
+              </button>
+            </div>
+          </div>
+        </div>
+      </div>
+      <div className="modal-backdrop fade show" onClick={onClose} />
+    </>
   );
 }
 
@@ -48,134 +108,124 @@ function AttentionCard({ to, label, count, icon, variant, hint }) {
   );
 }
 
-function PersonnelCard({ label, value, icon, variant, onClick }) {
-  return (
-    <button type="button" className={`card summary-card summary-card-${variant} summary-card-btn w-100 text-start`} onClick={onClick}>
-      <div className="card-body summary-card-body">
-        <div className="summary-card-layout">
-          <div className={`summary-card-icon summary-card-icon-${variant}`} aria-hidden="true">
-            <i className={`bi ${icon}`} />
-          </div>
-          <div className="summary-card-content">
-            <div className="summary-card-label">{label}</div>
-            <div className="summary-value">
-              {value}
-              <span className="summary-value-unit">名</span>
-            </div>
-          </div>
-        </div>
-      </div>
+function PersonalSection({ data, defaultOpen = true }) {
+  const [paidLeaveHelpOpen, setPaidLeaveHelpOpen] = useState(false);
+  const paidLeaveHelpButton = (
+    <button
+      type="button"
+      className="btn btn-link btn-sm mypage-paid-leave-help-btn"
+      onClick={() => setPaidLeaveHelpOpen(true)}
+    >
+      <i className="bi bi-question-circle" aria-hidden="true" />
+      有給について
     </button>
   );
-}
 
-function PersonalSection({ data, defaultOpen = true }) {
   return (
-    <details className="mypage-personal-details" open={defaultOpen}>
-      <summary className="mypage-personal-summary">
-        <i className="bi bi-person-vcard" aria-hidden="true" />
-        個人情報
-        <span className="mypage-personal-summary-hint">基本情報・写真</span>
-      </summary>
-      <div className="detail-summary-card mb-0 mypage-summary-card mt-3">
-        <div className="detail-summary-hero">
-          <div className="detail-summary-hero-text">
-            {data.employeeLinked ? (
-              <AlignedJapaneseName
-                name={data.name || data.displayName}
-                kana={data.nameKana}
-              />
-            ) : (
-              <>
-                <h2 className="detail-employee-name">{data.displayName || data.username}</h2>
-                <div className="detail-employee-kana text-muted">社員マスタ未連携</div>
-              </>
-            )}
-          </div>
-          {data.employeeLinked && data.workStatus && (
-            <span className={`badge status-badge detail-summary-status ${workStatusClass(data.workStatus)}`}>
-              {data.workStatus}
-            </span>
-          )}
-        </div>
-        <div className="detail-summary-body">
-          <div className="row g-4 align-items-start">
-            <div className="col">
-              <div className="row g-3 detail-summary-fields">
-                {data.employeeLinked ? (
-                  <>
-                    <div className="col-md-4">
-                      <InfoCell label="社員番号" value={data.employeeCode} />
-                    </div>
-                    <div className="col-md-4">
-                      <InfoCell label="社員種別" value={data.employeeType} />
-                    </div>
-                    <div className="col-md-4">
-                      <InfoCell label="所属会社" value={data.affiliationCompany} />
-                    </div>
-                    <div className="col-md-4">
-                      <InfoCell label="所属部門" value={data.departmentName} />
-                    </div>
-                    <div className="col-md-4">
-                      <InfoCell label="役職" value={data.position} />
-                    </div>
-                    <div className="col-md-4">
-                      <InfoCell label="メール" value={data.email} />
-                    </div>
-                    <div className="col-md-4">
-                      <InfoCell label="電話" value={data.phone} />
-                    </div>
-                    <div className="col-md-4">
-                      <InfoCell
-                        label="有給残（今年度）"
-                        value={
-                          data.paidLeaveCurrentYearRemaining != null
-                            && data.paidLeaveCurrentYearRemaining !== ''
-                            ? `${data.paidLeaveCurrentYearRemaining}日`
-                            : ''
-                        }
-                      />
-                    </div>
-                    <div className="col-md-4">
-                      <InfoCell
-                        label="有給残（前年度）"
-                        value={
-                          data.paidLeavePreviousYearRemaining != null
-                            && data.paidLeavePreviousYearRemaining !== ''
-                            ? `${data.paidLeavePreviousYearRemaining}日`
-                            : ''
-                        }
-                      />
-                    </div>
-                  </>
-                ) : (
-                  <div className="col-12">
-                    <div className="mypage-unlinked-note">
-                      <i className="bi bi-info-circle" aria-hidden="true" />
-                      <span>
-                        社員マスタとの連携がまだありません。ユーザー管理から連携できます。
-                      </span>
-                    </div>
-                  </div>
-                )}
-              </div>
+    <>
+      <details className="mypage-personal-details" open={defaultOpen}>
+        <summary className="mypage-personal-summary">
+          <i className="bi bi-person-vcard" aria-hidden="true" />
+          個人情報
+          <span className="mypage-personal-summary-hint">基本情報・写真</span>
+        </summary>
+        <div className="detail-summary-card mb-0 mypage-summary-card mt-3">
+          <div className="detail-summary-hero">
+            <div className="detail-summary-hero-text">
+              {data.employeeLinked ? (
+                <AlignedJapaneseName
+                  name={data.name || data.displayName}
+                  kana={data.nameKana}
+                />
+              ) : (
+                <>
+                  <h2 className="detail-employee-name">{data.displayName || data.username}</h2>
+                  <div className="detail-employee-kana text-muted">社員マスタ未連携</div>
+                </>
+              )}
             </div>
-            <div className="col-auto">
-              <div className="detail-photo-box">
-                {data.photoUrl ? (
-                  <img src={data.photoUrl} alt="個人写真" className="detail-photo-img" />
-                ) : (
-                  <div className="detail-photo-placeholder">
-                    <i className="bi bi-person-bounding-box" />
-                    <span>個人写真</span>
-                  </div>
-                )}
+          </div>
+          <div className="detail-summary-body">
+            <div className="row g-4 align-items-start">
+              <div className="col">
+                <div className="row g-3 detail-summary-fields">
+                  {data.employeeLinked ? (
+                    <>
+                      <div className="col-md-4">
+                        <InfoCell label="社員番号" value={data.employeeCode} />
+                      </div>
+                      <div className="col-md-4">
+                        <InfoCell label="社員種別" value={data.employeeType} />
+                      </div>
+                      <div className="col-md-4">
+                        <InfoCell label="所属会社" value={data.affiliationCompany} />
+                      </div>
+                      <div className="col-md-4">
+                        <InfoCell label="所属部門" value={data.departmentName} />
+                      </div>
+                      <div className="col-md-4">
+                        <InfoCell label="役職" value={data.position} />
+                      </div>
+                      <div className="col-md-4">
+                        <InfoCell label="メール" value={data.email} />
+                      </div>
+                      <div className="col-md-4">
+                        <InfoCell label="電話" value={data.phone} />
+                      </div>
+                      <div className="col-md-4">
+                        <InfoCell
+                          label="有給残（今年度）"
+                          labelAction={paidLeaveHelpButton}
+                          value={
+                            data.paidLeaveCurrentYearRemaining != null
+                              && data.paidLeaveCurrentYearRemaining !== ''
+                              ? `${data.paidLeaveCurrentYearRemaining}日`
+                              : ''
+                          }
+                        />
+                      </div>
+                      <div className="col-md-4">
+                        <InfoCell
+                          label="有給残（前年度）"
+                          value={
+                            data.paidLeavePreviousYearRemaining != null
+                              && data.paidLeavePreviousYearRemaining !== ''
+                              ? `${data.paidLeavePreviousYearRemaining}日`
+                              : ''
+                          }
+                        />
+                      </div>
+                    </>
+                  ) : (
+                    <div className="col-12">
+                      <div className="mypage-unlinked-note">
+                        <i className="bi bi-info-circle" aria-hidden="true" />
+                        <span>
+                          社員マスタとの連携がまだありません。ユーザー管理から連携できます。
+                        </span>
+                      </div>
+                    </div>
+                  )}
+                </div>
+              </div>
+              <div className="col-auto">
+                <div className="detail-photo-box">
+                  {data.photoUrl ? (
+                    <img src={data.photoUrl} alt="個人写真" className="detail-photo-img" />
+                  ) : (
+                    <div className="detail-photo-placeholder">
+                      <i className="bi bi-person-bounding-box" />
+                      <span>個人写真</span>
+                    </div>
+                  )}
+                </div>
               </div>
             </div>
           </div>
         </div>
-      </div>
-    </details>
+      </details>
+      <PaidLeaveHelpModal open={paidLeaveHelpOpen} onClose={() => setPaidLeaveHelpOpen(false)} />
+    </>
   );
 }
 
@@ -245,13 +295,13 @@ function EmployeeSelfServiceSection() {
 }
 
 function AdminDashboard({ overview, displayName }) {
-  const navigate = useNavigate();
-
-  function openEmployees(summaryKey) {
-    navigate('/employees', {
-      state: { mypageSummaryFilter: SUMMARY_FILTERS[summaryKey] },
-    });
-  }
+  const personnelSummary = {
+    activeCount: overview.activeCount ?? 0,
+    workingCount: overview.workingCount ?? 0,
+    standbyCount: overview.standbyCount ?? 0,
+    endingThisMonthCount: overview.endingThisMonthCount ?? 0,
+    companies: overview.companies ?? [],
+  };
 
   return (
     <>
@@ -316,44 +366,7 @@ function AdminDashboard({ overview, displayName }) {
           <i className="bi bi-people-fill" aria-hidden="true" />
           人員状況
         </div>
-        <div className="row g-3 summary-cards-row mb-0">
-          <div className="col-12 col-md-6 col-xl-3">
-            <PersonnelCard
-              label="在籍社員数"
-              value={overview.activeCount ?? 0}
-              icon="bi-people-fill"
-              variant="primary"
-              onClick={() => openEmployees('activeCount')}
-            />
-          </div>
-          <div className="col-12 col-md-6 col-xl-3">
-            <PersonnelCard
-              label="稼働中社員数"
-              value={overview.workingCount ?? 0}
-              icon="bi-lightning-charge-fill"
-              variant="success"
-              onClick={() => openEmployees('workingCount')}
-            />
-          </div>
-          <div className="col-12 col-md-6 col-xl-3">
-            <PersonnelCard
-              label="待機中社員数"
-              value={overview.standbyCount ?? 0}
-              icon="bi-pause-circle-fill"
-              variant="warning"
-              onClick={() => openEmployees('standbyCount')}
-            />
-          </div>
-          <div className="col-12 col-md-6 col-xl-3">
-            <PersonnelCard
-              label="今月終了予定社員数"
-              value={overview.endingThisMonthCount ?? 0}
-              icon="bi-calendar-event-fill"
-              variant="danger"
-              onClick={() => openEmployees('endingThisMonthCount')}
-            />
-          </div>
-        </div>
+        <SummaryCards summary={personnelSummary} loading={false} interactive={false} />
       </section>
 
       <section className="mb-4" aria-label="管理ショートカット">

@@ -70,6 +70,7 @@ public class BpHelpReferralService {
     private final ProjectCandidateRepository candidateRepository;
     private final EmployeeProjectAssignmentRepository assignmentRepository;
     private final BpHelpNotificationService bpHelpNotificationService;
+    private final ProjectFilledCloseRemindService filledCloseRemindService;
     private final SecurityService securityService;
 
     public BpHelpReferralService(
@@ -83,6 +84,7 @@ public class BpHelpReferralService {
             ProjectCandidateRepository candidateRepository,
             EmployeeProjectAssignmentRepository assignmentRepository,
             BpHelpNotificationService bpHelpNotificationService,
+            ProjectFilledCloseRemindService filledCloseRemindService,
             SecurityService securityService
     ) {
         this.referralRepository = referralRepository;
@@ -95,6 +97,7 @@ public class BpHelpReferralService {
         this.candidateRepository = candidateRepository;
         this.assignmentRepository = assignmentRepository;
         this.bpHelpNotificationService = bpHelpNotificationService;
+        this.filledCloseRemindService = filledCloseRemindService;
         this.securityService = securityService;
     }
 
@@ -437,6 +440,7 @@ public class BpHelpReferralService {
                 List.of(),
                 null,
                 null,
+                null,
                 null
         );
         EmployeeDto employee = employeeService.create(employeeRequest);
@@ -482,6 +486,7 @@ public class BpHelpReferralService {
         candidateRepository.markLostForEmployeeExcept(employee.id(), candidateId, now);
         projectRepository.incrementHeadcountFilled(project.id(), now);
         bpHelpNotificationService.autoCancelIfRequested(project.id());
+        filledCloseRemindService.syncForProject(project.id());
 
         if (!referralRepository.markHired(
                 referralId,

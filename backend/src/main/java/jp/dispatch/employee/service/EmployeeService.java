@@ -1,6 +1,7 @@
 package jp.dispatch.employee.service;
 
 import jp.dispatch.employee.audit.AuditAction;
+import jp.dispatch.employee.auth.AppUserDetails;
 import jp.dispatch.employee.auth.DataScopeService;
 import jp.dispatch.employee.auth.SecurityService;
 import jp.dispatch.employee.dto.*;
@@ -75,9 +76,48 @@ public class EmployeeService {
         this.paidLeaveBalanceService = paidLeaveBalanceService;
     }
 
-    public SummaryDto getSummary() {
+    public SummaryResponseDto getSummary() {
         requireEmployeeDirectoryAccess();
-        return repository.fetchSummary(dataScopeService.visibleDepartmentIdsOrNull());
+        List<Long> deptScope = dataScopeService.visibleDepartmentIdsOrNull();
+        List<String> companyScope = dataScopeService.visibleAffiliationCompaniesOrNull();
+        List<String> summaryCompanies = dataScopeService.summaryAffiliationCompanies();
+
+        List<CompanySummaryDto> companies = new ArrayList<>();
+        long totalActive = 0;
+        long totalWorking = 0;
+        long totalStandby = 0;
+        long totalEnding = 0;
+
+        if (summaryCompanies.isEmpty()) {
+            SummaryDto empty = repository.fetchSummary(deptScope, companyScope);
+            return new SummaryResponseDto(
+                    empty.activeCount(),
+                    empty.workingCount(),
+                    empty.standbyCount(),
+                    empty.endingThisMonthCount(),
+                    List.of()
+            );
+        }
+
+        for (String company : summaryCompanies) {
+            SummaryDto one = repository.fetchSummary(deptScope, List.of(company));
+            boolean primary = dataScopeService.isPrimarySummaryCompany(company);
+            companies.add(new CompanySummaryDto(
+                    company,
+                    primary,
+                    one.activeCount(),
+                    one.workingCount(),
+                    one.standbyCount(),
+                    one.endingThisMonthCount()
+            ));
+            totalActive += one.activeCount();
+            totalWorking += one.workingCount();
+            totalStandby += one.standbyCount();
+            totalEnding += one.endingThisMonthCount();
+        }
+
+        // 単一会社表示時は合計と一致。複数会社は合算（部門スコープ重複は会社で分割済み）
+        return new SummaryResponseDto(totalActive, totalWorking, totalStandby, totalEnding, companies);
     }
 
     public MasterDto getMaster() {
@@ -124,12 +164,13 @@ public class EmployeeService {
             throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "所属会社が不正です");
         }
         dataScopeService.ensureSearchDepartmentAllowed(departmentId);
+        String effectiveCompany = resolveSearchAffiliationCompany(affiliationCompany);
         List<EmployeeDto> employees = repository.search(
                 keyword,
                 employeeCode,
                 name,
                 departmentId,
-                blankToNull(affiliationCompany),
+                effectiveCompany,
                 summaryFilter,
                 skillKeyword,
                 technicalCategory,
@@ -151,6 +192,7 @@ public class EmployeeService {
         EmployeeDto employee = repository.findById(id)
                 .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "社員が見つかりません"));
         dataScopeService.ensureEmployeeAccessible(employee.departmentId());
+        dataScopeService.ensureEmployeeCompanyAccessible(employee.affiliationCompany());
         return calculationService.calculate(id)
                 .map(calc -> withCalculatedEvaluation(employee, calc))
                 .orElse(employee);
@@ -167,6 +209,7 @@ public class EmployeeService {
                 .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "社員が見つかりません"));
 
         dataScopeService.ensureEmployeeAccessible(baseDetail.departmentId());
+        dataScopeService.ensureEmployeeCompanyAccessible(baseDetail.affiliationCompany());
 
         EmployeeDetailDto detail = calculationService.calculateDto(id)
                 .map(calc -> withCalculationDetail(baseDetail, calc))
@@ -204,6 +247,7 @@ public class EmployeeService {
         EmployeeDto employee = repository.findById(id)
                 .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "社員が見つかりません"));
         dataScopeService.ensureEmployeeAccessible(employee.departmentId());
+        dataScopeService.ensureEmployeeCompanyAccessible(employee.affiliationCompany());
 
         List<EmployeePayrollSlipDto> linked = fileAttachmentRepository.findPayrollSlipsByEmployeeId(id);
         var merged = new LinkedHashMap<Long, EmployeePayrollSlipDto>();
@@ -234,6 +278,32 @@ public class EmployeeService {
         EmployeeDto employee = repository.findById(id)
                 .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "社員が見つかりません"));
         dataScopeService.ensureEmployeeAccessible(employee.departmentId());
+        dataScopeService.ensureEmployeeCompanyAccessible(employee.affiliationCompany());
+    }
+
+    /**
+     * 営業のみスコープ時は自社（複数兼職なら IN）に固定。
+     * リクエストの会社がスコープ外なら拒否。
+     * 複数営業会社の場合は先頭を返す（IN は search 側で別途）。
+     */
+    private String resolveSearchAffiliationCompany(String affiliationCompany) {
+        List<String> scoped = dataScopeService.visibleAffiliationCompaniesOrNull();
+        String requested = blankToNull(affiliationCompany);
+        if (scoped == null) {
+            return requested;
+        }
+        if (scoped.isEmpty()) {
+            throw new ResponseStatusException(HttpStatus.FORBIDDEN, "管轄外の所属会社は検索できません");
+        }
+        if (requested != null) {
+            String normalized = AffiliationCompanies.normalize(requested);
+            if (!scoped.contains(normalized)) {
+                throw new ResponseStatusException(HttpStatus.FORBIDDEN, "管轄外の所属会社は検索できません");
+            }
+            return normalized;
+        }
+        // 単一なら固定。複数は null を返し部門スコープに委ねる（search は単一会社カラム）
+        return scoped.size() == 1 ? scoped.getFirst() : null;
     }
 
     private void requireEmployeeDirectoryAccess() {
@@ -253,6 +323,7 @@ public class EmployeeService {
         EmployeeDto existing = repository.findById(id)
                 .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "社員が見つかりません"));
         dataScopeService.ensureEmployeeAccessible(existing.departmentId());
+        dataScopeService.ensureEmployeeCompanyAccessible(existing.affiliationCompany());
         relatedDataCleanupRepository.deleteEmployeeRelations(id);
         if (!detailRepository.deleteEmployee(id)) {
             throw new ResponseStatusException(HttpStatus.NOT_FOUND, "社員が見つかりません");
@@ -277,7 +348,7 @@ public class EmployeeService {
         EmployeeRequest req = toEmployeeRequest(normalized, employeeCode);
         validateNewEmployee(req, normalized.personal(), null);
         ensureDepartmentAssignable(req.departmentId());
-        long id = repository.insert(req);
+        long id = repository.insert(req, currentUserIdOrNull());
         detailRepository.saveDetail(id, normalized);
         calculationService.syncEvaluation(id);
         if (PaidLeaveBalanceService.isResignedWorkStatus(req.workStatus())) {
@@ -421,7 +492,8 @@ public class EmployeeService {
                 request.evaluationItems(),
                 request.overallEvaluation(),
                 request.salary(),
-                request.hr()
+                request.hr(),
+                request.version()
         );
         return insertEmployee(normalized, true);
     }
@@ -490,6 +562,7 @@ public class EmployeeService {
         EmployeeDto existing = repository.findById(id)
                 .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "社員が見つかりません"));
         dataScopeService.ensureEmployeeAccessible(existing.departmentId());
+        dataScopeService.ensureEmployeeCompanyAccessible(existing.affiliationCompany());
 
         String previousHireDate = detailRepository.findDetail(id)
                 .map(EmployeeDetailDto::hr)
@@ -503,7 +576,20 @@ public class EmployeeService {
         EmployeeRequest req = locked.toEmployeeRequest();
         validateUpdateEmployee(existing, req, locked.personal());
         ensureDepartmentAssignable(req.departmentId());
-        repository.update(id, req);
+        Integer expectedVersion = request.version();
+        if (expectedVersion == null) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "更新バージョンが指定されていません。画面を再読み込みしてください");
+        }
+        boolean updated = repository.updateOptimistic(id, req, expectedVersion, currentUserIdOrNull());
+        if (!updated) {
+            if (repository.findById(id).isEmpty()) {
+                throw new ResponseStatusException(HttpStatus.NOT_FOUND, "社員が見つかりません");
+            }
+            throw new ResponseStatusException(
+                    HttpStatus.CONFLICT,
+                    "他のユーザーにより更新されています。最新データを再読み込みしてから保存してください"
+            );
+        }
         detailRepository.saveDetail(id, locked);
         calculationService.syncEvaluation(id);
 
@@ -577,7 +663,8 @@ public class EmployeeService {
                 request.evaluationItems(),
                 request.overallEvaluation(),
                 request.salary(),
-                request.hr()
+                request.hr(),
+                request.version()
         );
     }
 
@@ -675,7 +762,10 @@ public class EmployeeService {
                 0,
                 employee.evaluation(),
                 employee.endDate(),
-                employee.evaluationCalculated()
+                employee.evaluationCalculated(),
+                employee.version(),
+                employee.updatedAt(),
+                employee.updatedByName()
         );
     }
 
@@ -739,7 +829,10 @@ public class EmployeeService {
                 employee.unitPrice(),
                 calc.evaluation(),
                 employee.endDate(),
-                true
+                true,
+                employee.version(),
+                employee.updatedAt(),
+                employee.updatedByName()
         );
     }
 
@@ -772,8 +865,16 @@ public class EmployeeService {
                 detail.hr(),
                 detail.monthlyExpenses(),
                 calc,
-                true
+                true,
+                detail.version(),
+                detail.updatedAt(),
+                detail.updatedByName()
         );
+    }
+
+    private Long currentUserIdOrNull() {
+        AppUserDetails user = securityService.currentUser();
+        return user != null ? user.getId() : null;
     }
 
     private EmployeeRequest toEmployeeRequest(EmployeeSaveRequest request, String employeeCode) {

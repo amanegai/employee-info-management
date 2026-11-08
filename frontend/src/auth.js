@@ -1,3 +1,5 @@
+import { normalizeAffiliationCompany } from './utils/employeeCode';
+
 export function hasRole(user, role) {
   return Boolean(user?.roles?.includes(role));
 }
@@ -192,6 +194,22 @@ export const USER_ROLE_OPTIONS = [
   { value: 'SALES_HEAD', label: '営業' },
 ];
 
+/** 兼職に選べるロール（管理者・一般社員・人事は不可） */
+export const SIDE_ASSIGNMENT_ROLE_VALUES = ['DIVISION_HEAD', 'DEPT_HEAD', 'SALES_HEAD'];
+
+export const SIDE_ASSIGNMENT_ROLE_OPTIONS = USER_ROLE_OPTIONS.filter((o) =>
+  SIDE_ASSIGNMENT_ROLE_VALUES.includes(o.value),
+);
+
+/** 本職がこれらのロールのとき兼職を追加できない */
+export function primaryRoleDisallowsSideAssignments(role) {
+  return role === 'ADMIN' || role === 'EMPLOYEE';
+}
+
+export function isSideAssignmentRoleAllowed(role) {
+  return SIDE_ASSIGNMENT_ROLE_VALUES.includes(role);
+}
+
 export const HR_DEPARTMENT_NAME = '人事部';
 export const SALES_DEPARTMENT_NAME = '営業部';
 
@@ -200,6 +218,11 @@ export function roleDepartmentMode(role) {
   if (role === 'HR' || role === 'SALES_HEAD') return 'fixed';
   if (role === 'DIVISION_HEAD' || role === 'DEPT_HEAD') return 'select';
   return 'none';
+}
+
+/** 管理者は所属会社を持たない（会社横断）。その他ロールは画面で選択する。 */
+export function roleShowsAffiliationCompany(role) {
+  return role !== 'ADMIN';
 }
 
 export function roleFixedDepartmentName(role) {
@@ -212,17 +235,29 @@ export function roleNeedsDepartment(role) {
   return roleDepartmentMode(role) !== 'none';
 }
 
-export function findDepartmentIdByName(departments, name) {
+export function findDepartmentIdByName(departments, name, affiliationCompany = null) {
   if (!name || !departments?.length) return null;
+  if (affiliationCompany) {
+    const normalized = normalizeAffiliationCompany(affiliationCompany);
+    const matched = departments.find(
+      (d) =>
+        d.name === name && normalizeAffiliationCompany(d.company) === normalized,
+    );
+    if (matched) return matched.id;
+  }
   const dept = departments.find((d) => d.name === name);
   return dept?.id ?? null;
 }
 
-export function resolveDepartmentIdForRole(role, departmentId, departments) {
+export function resolveDepartmentIdForRole(role, departmentId, departments, affiliationCompany = null) {
   const mode = roleDepartmentMode(role);
   if (mode === 'none') return null;
   if (mode === 'fixed') {
-    const fixedId = findDepartmentIdByName(departments, roleFixedDepartmentName(role));
+    const fixedId = findDepartmentIdByName(
+      departments,
+      roleFixedDepartmentName(role),
+      affiliationCompany,
+    );
     return fixedId ?? null;
   }
   if (departmentId) return Number(departmentId);
@@ -322,11 +357,61 @@ export function hasFullEmployeeAccess(user) {
   return hasRole(user, 'ADMIN') || hasRole(user, 'HR');
 }
 
+function salesDepartmentsForCompany(departments, company) {
+  const normalized = normalizeAffiliationCompany(company);
+  return (departments ?? [])
+    .filter(
+      (d) =>
+        normalizeAffiliationCompany(d.company) === normalized &&
+        d.name !== HR_DEPARTMENT_NAME,
+    )
+    .map((d) => d.id);
+}
+
+function resolveAssignmentVisibleDepartmentIds(assignment, departments) {
+  const role = assignment?.role;
+  if (role === 'ADMIN' || role === 'HR') return null;
+  if (role === 'SALES_HEAD') {
+    const company = assignment.affiliationCompany?.trim();
+    if (!company) return [];
+    return salesDepartmentsForCompany(departments, company);
+  }
+  const deptId = Number(assignment.departmentId);
+  if (!Number.isFinite(deptId) || deptId <= 0) return [];
+  if (role === 'DIVISION_HEAD') {
+    return resolveDepartmentFilterIds(String(deptId), departments) ?? [deptId];
+  }
+  if (role === 'DEPT_HEAD') {
+    return [deptId];
+  }
+  return [];
+}
+
 /** @returns {number[]|null} null = 全社員閲覧可 */
 export function resolveVisibleDepartmentIds(user, departments) {
   if (!user || hasFullEmployeeAccess(user)) return null;
+
+  const assignments = Array.isArray(user.assignments) ? user.assignments : [];
+  if (assignments.length > 0) {
+    const ids = new Set();
+    let anyScoped = false;
+    for (const assignment of assignments) {
+      const scope = resolveAssignmentVisibleDepartmentIds(assignment, departments);
+      if (scope === null) return null;
+      if (assignment.role === 'SALES_HEAD'
+        || assignment.role === 'DIVISION_HEAD'
+        || assignment.role === 'DEPT_HEAD') {
+        anyScoped = true;
+        scope.forEach((id) => ids.add(id));
+      }
+    }
+    return anyScoped ? [...ids] : [];
+  }
+
   if (hasRole(user, 'SALES_HEAD')) {
-    return (departments ?? []).map((d) => d.id);
+    const company = user.affiliationCompany?.trim();
+    if (!company) return [];
+    return salesDepartmentsForCompany(departments, company);
   }
   const deptId = Number(user.departmentId);
   if (!Number.isFinite(deptId) || deptId <= 0) return [];
@@ -337,6 +422,33 @@ export function resolveVisibleDepartmentIds(user, departments) {
     return [deptId];
   }
   return null;
+}
+
+/** 営業兼職の所属会社一覧（部門長兼職がある場合は null＝会社条件なし） */
+export function resolveVisibleAffiliationCompanies(user) {
+  if (!user || hasFullEmployeeAccess(user)) return null;
+  const assignments = Array.isArray(user.assignments) ? user.assignments : [];
+  if (assignments.length > 0) {
+    const salesCompanies = [];
+    let hasDeptScopeRole = false;
+    for (const assignment of assignments) {
+      if (assignment.role === 'DIVISION_HEAD' || assignment.role === 'DEPT_HEAD') {
+        hasDeptScopeRole = true;
+      }
+      if (assignment.role === 'SALES_HEAD') {
+        const company = assignment.affiliationCompany?.trim();
+        if (company) {
+          const normalized = normalizeAffiliationCompany(company);
+          if (!salesCompanies.includes(normalized)) salesCompanies.push(normalized);
+        }
+      }
+    }
+    if (salesCompanies.length === 0 || hasDeptScopeRole) return null;
+    return salesCompanies;
+  }
+  if (!hasRole(user, 'SALES_HEAD')) return null;
+  const company = user.affiliationCompany?.trim();
+  return company ? [normalizeAffiliationCompany(company)] : [];
 }
 
 /** 検索時の部門条件をユーザー管轄内に制限する */
@@ -363,8 +475,17 @@ export function filterDepartmentsByScope(departments, user) {
 
 export function filterEmployeesByUserScope(employees, user, departments) {
   const scope = resolveVisibleDepartmentIds(user, departments);
-  if (scope === null) return employees ?? [];
-  return filterEmployeesByDepartmentScope(employees, scope);
+  let list = employees ?? [];
+  if (scope !== null) {
+    list = filterEmployeesByDepartmentScope(list, scope);
+  }
+  const companies = resolveVisibleAffiliationCompanies(user);
+  if (companies != null) {
+    if (companies.length === 0) return [];
+    const allowed = new Set(companies);
+    list = list.filter((emp) => allowed.has(normalizeAffiliationCompany(emp.affiliationCompany)));
+  }
+  return list;
 }
 
 /** @returns {number[]|null} null = 全部門へ登録可 */

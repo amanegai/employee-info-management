@@ -30,7 +30,10 @@ public record EmployeeDetailDto(
         HrDto hr,
         List<MonthlyExpenseDto> monthlyExpenses,
         EvaluationCalcDto evaluationCalculation,
-        boolean evaluationCalculated
+        boolean evaluationCalculated,
+        int version,
+        String updatedAt,
+        String updatedByName
 ) {
     public record MonthlyExpenseDto(
             String targetMonth,
@@ -238,7 +241,10 @@ public record EmployeeDetailDto(
                 null,
                 List.of(),
                 evaluationCalculation,
-                evaluationCalculated
+                evaluationCalculated,
+                version,
+                updatedAt,
+                updatedByName
         );
     }
 }

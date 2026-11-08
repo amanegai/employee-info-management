@@ -39,6 +39,7 @@ public class EmployeeProjectAssignmentService {
     private final AssignmentCancelFollowupService followupService;
     private final SecurityService securityService;
     private final AuditLogService auditLogService;
+    private final ProjectFilledCloseRemindService filledCloseRemindService;
 
     @Value("${app.employee-status.ending-soon-days:30}")
     private int endingSoonDays;
@@ -50,7 +51,8 @@ public class EmployeeProjectAssignmentService {
             EmployeeStatusChangeLogRepository statusLogRepository,
             AssignmentCancelFollowupService followupService,
             SecurityService securityService,
-            AuditLogService auditLogService
+            AuditLogService auditLogService,
+            ProjectFilledCloseRemindService filledCloseRemindService
     ) {
         this.assignmentRepository = assignmentRepository;
         this.employeeRepository = employeeRepository;
@@ -59,6 +61,7 @@ public class EmployeeProjectAssignmentService {
         this.followupService = followupService;
         this.securityService = securityService;
         this.auditLogService = auditLogService;
+        this.filledCloseRemindService = filledCloseRemindService;
     }
 
     public List<EmployeeProjectAssignmentDto> listByEmployee(long employeeId) {
@@ -111,6 +114,7 @@ public class EmployeeProjectAssignmentService {
         String now = timestampNow();
         assignmentRepository.cancel(id, now);
         projectRepository.decrementHeadcountFilled(assignment.projectId(), now);
+        filledCloseRemindService.syncForProject(assignment.projectId());
 
         EmployeeStatusRow employee = employeeRepository.findStatusById(assignment.employeeId()).orElse(null);
         String currentWorkStatus = employee != null && employee.workStatus() != null && !employee.workStatus().isBlank()

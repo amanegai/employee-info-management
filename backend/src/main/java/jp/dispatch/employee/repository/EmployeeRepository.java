@@ -17,8 +17,10 @@ import org.springframework.stereotype.Repository;
 import java.sql.PreparedStatement;
 import java.sql.Types;
 import java.time.LocalDate;
+import java.time.LocalDateTime;
 import java.time.YearMonth;
 import java.time.ZoneId;
+import java.time.format.DateTimeFormatter;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Optional;
@@ -27,6 +29,7 @@ import java.util.Optional;
 public class EmployeeRepository {
 
     private static final ZoneId ZONE = ZoneId.of("Asia/Tokyo");
+    private static final DateTimeFormatter TIMESTAMP = DateTimeFormatter.ofPattern("yyyy-MM-dd'T'HH:mm:ss");
 
     private static final RowMapper<EmployeeDto> EMPLOYEE_MAPPER = (rs, rowNum) -> new EmployeeDto(
             rs.getLong("id"),
@@ -43,7 +46,10 @@ public class EmployeeRepository {
             rs.getInt("unit_price"),
             rs.getString("evaluation"),
             rs.getString("end_date"),
-            false
+            false,
+            rs.getInt("version"),
+            rs.getString("updated_at"),
+            rs.getString("updated_by_name")
     );
 
     private final JdbcTemplate jdbc;
@@ -54,16 +60,24 @@ public class EmployeeRepository {
         this.dialect = dialect;
     }
 
-    public SummaryDto fetchSummary(List<Long> scopeDepartmentIds) {
+    public SummaryDto fetchSummary(List<Long> scopeDepartmentIds, String scopeAffiliationCompany) {
+        List<String> companies = scopeAffiliationCompany == null || scopeAffiliationCompany.isBlank()
+                ? null
+                : List.of(scopeAffiliationCompany.trim());
+        return fetchSummary(scopeDepartmentIds, companies);
+    }
+
+    public SummaryDto fetchSummary(List<Long> scopeDepartmentIds, List<String> scopeAffiliationCompanies) {
         YearMonth currentMonth = YearMonth.now(ZONE);
         String monthStart = currentMonth.atDay(1).toString();
         String monthEnd = currentMonth.atEndOfMonth().toString();
         String today = LocalDate.now(ZONE).toString();
 
-        long active = countScoped("work_status != '退職'", scopeDepartmentIds);
-        long working = countScoped("work_status = '稼働中'", scopeDepartmentIds);
-        long standby = countScoped("work_status = '待機中'", scopeDepartmentIds);
-        long endingThisMonth = countEndingThisMonth(monthStart, monthEnd, today, scopeDepartmentIds);
+        long active = countScoped("work_status != '退職'", scopeDepartmentIds, scopeAffiliationCompanies);
+        long working = countScoped("work_status = '稼働中'", scopeDepartmentIds, scopeAffiliationCompanies);
+        long standby = countScoped("work_status = '待機中'", scopeDepartmentIds, scopeAffiliationCompanies);
+        long endingThisMonth = countEndingThisMonth(
+                monthStart, monthEnd, today, scopeDepartmentIds, scopeAffiliationCompanies);
 
         return new SummaryDto(active, working, standby, endingThisMonth);
     }
@@ -72,7 +86,8 @@ public class EmployeeRepository {
             String monthStart,
             String monthEnd,
             String today,
-            List<Long> scopeDepartmentIds
+            List<Long> scopeDepartmentIds,
+            List<String> scopeAffiliationCompanies
     ) {
         var sql = new StringBuilder("""
                 SELECT COUNT(DISTINCT e.id) FROM employee e
@@ -81,6 +96,7 @@ public class EmployeeRepository {
         var params = new ArrayList<Object>();
         appendEndingThisMonthConditions(sql, params, "e.id", monthStart, monthEnd, today);
         appendDepartmentScopeClause(sql, params, scopeDepartmentIds, "e");
+        appendAffiliationCompanyScopeClause(sql, params, scopeAffiliationCompanies, "e");
         Long result = jdbc.queryForObject(sql.toString(), Long.class, params.toArray());
         return result != null ? result : 0L;
     }
@@ -118,10 +134,15 @@ public class EmployeeRepository {
         sql.append(" ) ");
     }
 
-    private long countScoped(String whereClause, List<Long> scopeDepartmentIds) {
+    private long countScoped(
+            String whereClause,
+            List<Long> scopeDepartmentIds,
+            List<String> scopeAffiliationCompanies
+    ) {
         var sql = new StringBuilder("SELECT COUNT(*) FROM employee WHERE ").append(whereClause);
         var params = new ArrayList<Object>();
         appendDepartmentScopeClause(sql, params, scopeDepartmentIds, "");
+        appendAffiliationCompanyScopeClause(sql, params, scopeAffiliationCompanies, "");
         Long result = jdbc.queryForObject(sql.toString(), Long.class, params.toArray());
         return result != null ? result : 0L;
     }
@@ -194,17 +215,22 @@ public class EmployeeRepository {
                        e.affiliation_company,
                        e.position, e.assignment_role, e.employee_type, e.work_status,
                        COALESCE(es.billing_unit_price, 0) AS unit_price,
-                       e.evaluation, e.end_date
+                       e.evaluation, e.end_date,
+                       COALESCE(e.version, 1) AS version,
+                       e.updated_at,
+                       COALESCE(NULLIF(TRIM(au.display_name), ''), au.username) AS updated_by_name
                 FROM employee e
                 LEFT JOIN department d ON d.id = e.department_id
                 LEFT JOIN employee_salary es ON es.employee_id = e.id
                 LEFT JOIN employee_personal ep ON ep.employee_id = e.id
+                LEFT JOIN auth_user au ON au.id = e.updated_by
                 WHERE 1=1
                 """);
         var params = new ArrayList<Object>();
 
         appendSummaryFilter(sql, params, summaryFilter);
         appendDepartmentScopeClause(sql, params, scopeDepartmentIds, "e");
+        // affiliationCompany は検索条件としても渡される（営業スコープ時は呼び出し側で強制）
 
         if (keyword != null && !keyword.isBlank()) {
             String pattern = "%" + keyword.trim() + "%";
@@ -353,16 +379,55 @@ public class EmployeeRepository {
         dialect.appendEmployeeDepartmentScope(sql, params, scopeDepartmentIds, tableAlias);
     }
 
+    /**
+     * {@code null} = 会社条件なし、空リスト = 閲覧不可（0件）、非空 = IN / = 条件。
+     */
+    private void appendAffiliationCompanyScopeClause(
+            StringBuilder sql,
+            List<Object> params,
+            List<String> scopeAffiliationCompanies,
+            String tableAlias
+    ) {
+        if (scopeAffiliationCompanies == null) {
+            return;
+        }
+        if (scopeAffiliationCompanies.isEmpty()) {
+            sql.append(" AND 1=0");
+            return;
+        }
+        String column = tableAlias == null || tableAlias.isBlank()
+                ? "affiliation_company"
+                : tableAlias + ".affiliation_company";
+        if (scopeAffiliationCompanies.size() == 1) {
+            sql.append(" AND ").append(column).append(" = ?");
+            params.add(scopeAffiliationCompanies.getFirst().trim());
+            return;
+        }
+        sql.append(" AND ").append(column).append(" IN (");
+        for (int i = 0; i < scopeAffiliationCompanies.size(); i++) {
+            if (i > 0) {
+                sql.append(", ");
+            }
+            sql.append("?");
+            params.add(scopeAffiliationCompanies.get(i).trim());
+        }
+        sql.append(")");
+    }
+
     public Optional<EmployeeDto> findById(long id) {
         var list = jdbc.query(
                 """
                 SELECT e.id, e.employee_code, e.name, ep.furigana AS name_kana,
                        e.department_id, d.name AS department_name,
                        e.affiliation_company,
-                       e.position, e.assignment_role, e.employee_type, e.work_status, e.unit_price, e.evaluation, e.end_date
+                       e.position, e.assignment_role, e.employee_type, e.work_status, e.unit_price, e.evaluation, e.end_date,
+                       COALESCE(e.version, 1) AS version,
+                       e.updated_at,
+                       COALESCE(NULLIF(TRIM(au.display_name), ''), au.username) AS updated_by_name
                 FROM employee e
                 LEFT JOIN department d ON d.id = e.department_id
                 LEFT JOIN employee_personal ep ON ep.employee_id = e.id
+                LEFT JOIN auth_user au ON au.id = e.updated_by
                 WHERE e.id = ?
                 """,
                 EMPLOYEE_MAPPER,
@@ -371,14 +436,16 @@ public class EmployeeRepository {
         return list.isEmpty() ? Optional.empty() : Optional.of(list.getFirst());
     }
 
-    public long insert(EmployeeRequest req) {
+    public long insert(EmployeeRequest req, Long createdByUserId) {
+        String now = nowTimestamp();
         var keyHolder = new GeneratedKeyHolder();
         jdbc.update(con -> {
             PreparedStatement ps = con.prepareStatement(
                     """
                     INSERT INTO employee (employee_code, name, department_id, affiliation_company, position, assignment_role,
-                        employee_type, work_status, unit_price, evaluation, end_date)
-                    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                        employee_type, work_status, unit_price, evaluation, end_date,
+                        version, updated_at, updated_by)
+                    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 1, ?, ?)
                     """,
                     JdbcGeneratedKeySupport.ID_COLUMNS
             );
@@ -393,17 +460,21 @@ public class EmployeeRepository {
             ps.setInt(9, req.unitPrice());
             ps.setString(10, req.evaluation());
             ps.setString(11, blankToNull(req.endDate()));
+            ps.setString(12, now);
+            setNullableLong(ps, 13, createdByUserId);
             return ps;
         }, keyHolder);
         return JdbcGeneratedKeySupport.requireId(keyHolder, "社員の作成に失敗しました");
     }
 
-    public boolean update(long id, EmployeeRequest req) {
+    /** @return true if updated; false if version conflict or missing row */
+    public boolean updateOptimistic(long id, EmployeeRequest req, int expectedVersion, Long updatedByUserId) {
         int rows = jdbc.update(
                 """
                 UPDATE employee SET employee_code=?, name=?, department_id=?, affiliation_company=?, position=?, assignment_role=?,
-                    employee_type=?, work_status=?, unit_price=?, evaluation=?, end_date=?
-                WHERE id=?
+                    employee_type=?, work_status=?, unit_price=?, evaluation=?, end_date=?,
+                    version = version + 1, updated_at = ?, updated_by = ?
+                WHERE id=? AND version=?
                 """,
                 req.employeeCode(),
                 req.name(),
@@ -416,7 +487,10 @@ public class EmployeeRepository {
                 req.unitPrice(),
                 req.evaluation(),
                 blankToNull(req.endDate()),
-                id
+                nowTimestamp(),
+                updatedByUserId,
+                id,
+                expectedVersion
         );
         return rows > 0;
     }
@@ -585,7 +659,22 @@ public class EmployeeRepository {
     }
 
     public void updateEvaluation(long employeeId, String evaluation) {
-        jdbc.update("UPDATE employee SET evaluation = ? WHERE id = ?", evaluation, employeeId);
+        jdbc.update(
+                """
+                UPDATE employee
+                SET evaluation = ?,
+                    version = COALESCE(version, 1) + 1,
+                    updated_at = ?
+                WHERE id = ?
+                """,
+                evaluation,
+                nowTimestamp(),
+                employeeId
+        );
+    }
+
+    private static String nowTimestamp() {
+        return LocalDateTime.now(ZONE).format(TIMESTAMP);
     }
 
     public Optional<EmployeeStatusRow> findStatusById(long id) {
@@ -603,9 +692,16 @@ public class EmployeeRepository {
 
     public void updateWorkStatusAndEndDate(long id, String workStatus, String endDate) {
         jdbc.update(
-                "UPDATE employee SET work_status = ?, end_date = ? WHERE id = ?",
+                """
+                UPDATE employee
+                SET work_status = ?, end_date = ?,
+                    version = COALESCE(version, 1) + 1,
+                    updated_at = ?
+                WHERE id = ?
+                """,
                 workStatus,
                 endDate,
+                nowTimestamp(),
                 id
         );
     }

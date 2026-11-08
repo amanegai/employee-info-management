@@ -249,7 +249,12 @@ public class AuthMfaService {
     private UserDto toUserDto(AppUserDetails user) {
         boolean totpEnabled = authUserRepository.isTotpEnabled(user.getId());
         int remaining = totpEnabled ? recoveryCodeService.countRemaining(user.getId()) : 0;
-        return AuthMapper.toUserDto(user, totpEnabled, remaining);
+        return AuthMapper.toUserDto(
+                user,
+                totpEnabled,
+                remaining,
+                authUserRepository.findAssignmentDtos(user.getId())
+        );
     }
 
     private AppUserDetails requireAuthenticatedUser() {

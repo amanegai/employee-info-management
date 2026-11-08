@@ -39,6 +39,7 @@ public class DispatchProjectService {
     private final ClientRepository clientRepository;
     private final SecurityService securityService;
     private final BpHelpNotificationService bpHelpNotificationService;
+    private final ProjectFilledCloseRemindService filledCloseRemindService;
 
     public DispatchProjectService(
             DispatchProjectRepository projectRepository,
@@ -46,7 +47,8 @@ public class DispatchProjectService {
             RelatedDataCleanupRepository relatedDataCleanupRepository,
             ClientRepository clientRepository,
             SecurityService securityService,
-            BpHelpNotificationService bpHelpNotificationService
+            BpHelpNotificationService bpHelpNotificationService,
+            ProjectFilledCloseRemindService filledCloseRemindService
     ) {
         this.projectRepository = projectRepository;
         this.candidateRepository = candidateRepository;
@@ -54,6 +56,7 @@ public class DispatchProjectService {
         this.clientRepository = clientRepository;
         this.securityService = securityService;
         this.bpHelpNotificationService = bpHelpNotificationService;
+        this.filledCloseRemindService = filledCloseRemindService;
     }
 
     public List<String> getProjectStatuses() {
@@ -157,11 +160,11 @@ public class DispatchProjectService {
         } else {
             next = "OPEN";
         }
-        if (next.equals(header.status())) {
-            return;
+        if (!next.equals(header.status())) {
+            projectRepository.updateStatus(id, next, null, now);
+            bpHelpNotificationService.autoCancelIfRequested(id);
         }
-        projectRepository.updateStatus(id, next, null, now);
-        bpHelpNotificationService.autoCancelIfRequested(id);
+        filledCloseRemindService.syncForProject(id);
     }
 
     public DispatchProjectDto updateStatus(long id, DispatchProjectStatusRequest request) {
@@ -176,6 +179,7 @@ public class DispatchProjectService {
         }
         projectRepository.updateStatus(id, status, blankToNull(request.notes()), timestampNow());
         bpHelpNotificationService.autoCancelIfRequested(id);
+        filledCloseRemindService.syncForProject(id);
         return getById(id);
     }
 

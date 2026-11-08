@@ -2,6 +2,14 @@ const API_BASE = '/api';
 
 let unauthorizedHandler = null;
 
+export class ApiError extends Error {
+  constructor(message, status) {
+    super(message);
+    this.name = 'ApiError';
+    this.status = status;
+  }
+}
+
 async function importMasterFile(path, file, dryRun) {
   const formData = new FormData();
   formData.append('file', file);
@@ -55,7 +63,7 @@ async function request(path, options = {}) {
     } catch {
       /* ignore */
     }
-    throw new Error(message);
+    throw new ApiError(message, res.status);
   }
   if (res.status === 204) return null;
   const text = await res.text();

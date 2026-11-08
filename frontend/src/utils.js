@@ -213,7 +213,26 @@ const EMPLOYEE_LIST_CSV_HEADERS = [
   '稼働状況',
   '請求単価',
   '評価',
+  '最終更新',
+  '更新者',
 ];
+
+export function formatEmployeeUpdatedAt(value) {
+  if (!value) return '';
+  const text = String(value).trim();
+  if (!text) return '';
+  const normalized = text.includes('T') ? text : text.replace(' ', 'T');
+  const date = new Date(normalized);
+  if (Number.isNaN(date.getTime())) {
+    return text.replace('T', ' ').slice(0, 16);
+  }
+  const y = date.getFullYear();
+  const m = String(date.getMonth() + 1).padStart(2, '0');
+  const d = String(date.getDate()).padStart(2, '0');
+  const hh = String(date.getHours()).padStart(2, '0');
+  const mm = String(date.getMinutes()).padStart(2, '0');
+  return `${y}-${m}-${d} ${hh}:${mm}`;
+}
 
 function escapeCsvCell(value) {
   const text = value == null ? '' : String(value);
@@ -234,6 +253,8 @@ function buildEmployeeListCsv(employees) {
     emp.workStatus,
     emp.unitPrice ?? 0,
     emp.evaluation,
+    formatEmployeeUpdatedAt(emp.updatedAt),
+    emp.updatedByName || '',
   ]);
   return [EMPLOYEE_LIST_CSV_HEADERS, ...rows]
     .map((row) => row.map(escapeCsvCell).join(','))
@@ -750,6 +771,7 @@ export const EMPTY_EMPLOYEE_FORM = {
   unitPrice: '',
   evaluation: '',
   endDate: '',
+  version: null,
   personal: { ...EMPTY_PERSONAL },
   skills: [],
   technicalSkills: {},
@@ -793,6 +815,7 @@ export function detailToForm(detail) {
     unitPrice: detail.unitPrice != null && detail.unitPrice !== 0 ? String(detail.unitPrice) : '',
     evaluation: detail.evaluation ?? '',
     endDate: detail.endDate ?? '',
+    version: detail.version ?? null,
     personal: detail.personal
       ? {
           gender: detail.personal.gender ?? '',
@@ -999,6 +1022,7 @@ export function formToSavePayload(form) {
     unitPrice: Number(withEval.unitPrice) || 0,
     evaluation,
     endDate: withEval.endDate || null,
+    version: withEval.version != null ? Number(withEval.version) : null,
     personal: {
       ...withEval.personal,
       nationalityId:

@@ -1,11 +1,16 @@
 package jp.dispatch.employee.repository;
 
 import jp.dispatch.employee.auth.AppUserDetails;
+import jp.dispatch.employee.auth.UserAssignment;
+import jp.dispatch.employee.dto.AuthUserAssignmentDto;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.stereotype.Repository;
 
+import java.util.ArrayList;
+import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Optional;
+import java.util.Set;
 
 @Repository
 public class AuthUserRepository {
@@ -33,7 +38,8 @@ public class AuthUserRepository {
     public Optional<AppUserDetails> findByUsername(String username) {
         var users = jdbc.query(
                 """
-                SELECT id, username, password_hash, display_name, department_id, employee_id, enabled
+                SELECT id, username, password_hash, display_name, department_id, affiliation_company,
+                       employee_id, enabled
                 FROM auth_user
                 WHERE username = ?
                 """,
@@ -43,6 +49,7 @@ public class AuthUserRepository {
                         rs.getString("password_hash"),
                         rs.getString("display_name"),
                         readNullableLong(rs, "department_id"),
+                        blankToNull(rs.getString("affiliation_company")),
                         readNullableLong(rs, "employee_id"),
                         rs.getInt("enabled") == 1,
                         List.of()
@@ -53,16 +60,19 @@ public class AuthUserRepository {
             return Optional.empty();
         }
         AppUserDetails user = users.getFirst();
-        List<String> roles = findRoles(user.getId());
+        List<UserAssignment> assignments = findAssignments(user.getId());
+        List<String> roles = rolesFromAssignmentsOrTable(user.getId(), assignments);
         return Optional.of(new AppUserDetails(
                 user.getId(),
                 user.getUsername(),
                 user.getPassword(),
                 user.getDisplayName(),
                 user.getDepartmentId(),
+                user.getAffiliationCompany(),
                 user.getEmployeeId(),
                 user.isEnabled(),
-                roles
+                roles,
+                assignments
         ));
     }
 
@@ -74,7 +84,7 @@ public class AuthUserRepository {
             Long departmentId,
             List<String> roles
     ) {
-        createUser(username, passwordHash, displayName, email, departmentId, null, roles);
+        createUser(username, passwordHash, displayName, email, departmentId, null, null, roles);
     }
 
     public void createUser(
@@ -83,19 +93,24 @@ public class AuthUserRepository {
             String displayName,
             String email,
             Long departmentId,
+            String affiliationCompany,
             Long employeeId,
             List<String> roles
     ) {
         jdbc.update(
                 """
-                INSERT INTO auth_user (username, password_hash, display_name, email, department_id, employee_id, enabled)
-                VALUES (?, ?, ?, ?, ?, ?, 1)
+                INSERT INTO auth_user (
+                    username, password_hash, display_name, email,
+                    department_id, affiliation_company, employee_id, enabled
+                )
+                VALUES (?, ?, ?, ?, ?, ?, ?, 1)
                 """,
                 username,
                 passwordHash,
                 displayName,
                 email,
                 departmentId,
+                affiliationCompany,
                 employeeId
         );
         Long userId = jdbc.queryForObject(
@@ -109,6 +124,16 @@ public class AuthUserRepository {
         for (String role : roles) {
             jdbc.update("INSERT INTO auth_user_role (user_id, role) VALUES (?, ?)", userId, role);
         }
+        // 初期化系からの作成でも本職1行を残す（V47 以降）
+        if (roles != null && !roles.isEmpty()) {
+            replaceAssignments(userId, List.of(new AssignmentWrite(
+                    affiliationCompany,
+                    roles.getFirst(),
+                    departmentId,
+                    true,
+                    0
+            )));
+        }
     }
 
     private List<String> findRoles(long userId) {
@@ -117,6 +142,97 @@ public class AuthUserRepository {
                 (rs, rowNum) -> rs.getString("role"),
                 userId
         );
+    }
+
+    private List<String> rolesFromAssignmentsOrTable(long userId, List<UserAssignment> assignments) {
+        if (assignments != null && !assignments.isEmpty()) {
+            Set<String> roles = new LinkedHashSet<>();
+            for (UserAssignment assignment : assignments) {
+                if (assignment.role() != null && !assignment.role().isBlank()) {
+                    roles.add(assignment.role());
+                }
+            }
+            if (!roles.isEmpty()) {
+                return new ArrayList<>(roles);
+            }
+        }
+        return findRoles(userId);
+    }
+
+    public List<UserAssignment> findAssignments(long userId) {
+        return jdbc.query(
+                """
+                SELECT id, affiliation_company, role, department_id, is_primary, sort_order
+                FROM auth_user_assignment
+                WHERE user_id = ?
+                ORDER BY sort_order, id
+                """,
+                (rs, rowNum) -> new UserAssignment(
+                        rs.getLong("id"),
+                        blankToNull(rs.getString("affiliation_company")),
+                        rs.getString("role"),
+                        readNullableLong(rs, "department_id"),
+                        rs.getBoolean("is_primary"),
+                        rs.getInt("sort_order")
+                ),
+                userId
+        );
+    }
+
+    public List<AuthUserAssignmentDto> findAssignmentDtos(long userId) {
+        return jdbc.query(
+                """
+                SELECT a.id, a.affiliation_company, a.role, a.department_id, d.name AS department_name,
+                       a.is_primary, a.sort_order
+                FROM auth_user_assignment a
+                LEFT JOIN department d ON d.id = a.department_id
+                WHERE a.user_id = ?
+                ORDER BY a.sort_order, a.id
+                """,
+                (rs, rowNum) -> new AuthUserAssignmentDto(
+                        rs.getLong("id"),
+                        blankToNull(rs.getString("affiliation_company")),
+                        rs.getString("role"),
+                        readNullableLong(rs, "department_id"),
+                        rs.getString("department_name"),
+                        rs.getBoolean("is_primary"),
+                        rs.getInt("sort_order")
+                ),
+                userId
+        );
+    }
+
+    public void replaceAssignments(long userId, List<AssignmentWrite> assignments) {
+        jdbc.update("DELETE FROM auth_user_assignment WHERE user_id = ?", userId);
+        if (assignments == null || assignments.isEmpty()) {
+            return;
+        }
+        int order = 0;
+        for (AssignmentWrite assignment : assignments) {
+            jdbc.update(
+                    """
+                    INSERT INTO auth_user_assignment (
+                        user_id, affiliation_company, role, department_id, is_primary, sort_order
+                    ) VALUES (?, ?, ?, ?, ?, ?)
+                    """,
+                    userId,
+                    assignment.affiliationCompany(),
+                    assignment.role(),
+                    assignment.departmentId(),
+                    assignment.primary(),
+                    assignment.sortOrder() >= 0 ? assignment.sortOrder() : order
+            );
+            order += 1;
+        }
+    }
+
+    public record AssignmentWrite(
+            String affiliationCompany,
+            String role,
+            Long departmentId,
+            boolean primary,
+            int sortOrder
+    ) {
     }
 
     private static Long readNullableLong(java.sql.ResultSet rs, String column) throws java.sql.SQLException {
@@ -128,6 +244,7 @@ public class AuthUserRepository {
         return jdbc.query(
                 """
                 SELECT u.id, u.username, u.display_name, u.email, u.department_id, d.name AS department_name,
+                       u.affiliation_company,
                        u.employee_id, e.employee_code, e.name AS employee_name, u.enabled,
                        COALESCE(u.totp_enabled, 0) AS totp_enabled
                 FROM auth_user u
@@ -143,6 +260,7 @@ public class AuthUserRepository {
         var users = jdbc.query(
                 """
                 SELECT u.id, u.username, u.display_name, u.email, u.department_id, d.name AS department_name,
+                       u.affiliation_company,
                        u.employee_id, e.employee_code, e.name AS employee_name, u.enabled,
                        COALESCE(u.totp_enabled, 0) AS totp_enabled
                 FROM auth_user u
@@ -164,12 +282,20 @@ public class AuthUserRepository {
                 rs.getString("email"),
                 readNullableLong(rs, "department_id"),
                 rs.getString("department_name"),
+                blankToNull(rs.getString("affiliation_company")),
                 readNullableLong(rs, "employee_id"),
                 rs.getString("employee_code"),
                 rs.getString("employee_name"),
                 rs.getInt("enabled") == 1,
                 rs.getInt("totp_enabled") == 1
         );
+    }
+
+    private static String blankToNull(String value) {
+        if (value == null || value.isBlank()) {
+            return null;
+        }
+        return value.trim();
     }
 
     public boolean isTotpEnabled(long userId) {
@@ -209,16 +335,26 @@ public class AuthUserRepository {
         );
     }
 
-    public void updateUser(long id, String displayName, String email, Long departmentId, Long employeeId, boolean enabled) {
+    public void updateUser(
+            long id,
+            String displayName,
+            String email,
+            Long departmentId,
+            String affiliationCompany,
+            Long employeeId,
+            boolean enabled
+    ) {
         jdbc.update(
                 """
                 UPDATE auth_user
-                SET display_name = ?, email = ?, department_id = ?, employee_id = ?, enabled = ?
+                SET display_name = ?, email = ?, department_id = ?, affiliation_company = ?,
+                    employee_id = ?, enabled = ?
                 WHERE id = ?
                 """,
                 displayName,
                 email,
                 departmentId,
+                affiliationCompany,
                 employeeId,
                 enabled ? 1 : 0,
                 id
@@ -250,6 +386,7 @@ public class AuthUserRepository {
     }
 
     public boolean deleteUser(long id) {
+        jdbc.update("DELETE FROM auth_user_assignment WHERE user_id = ?", id);
         jdbc.update("DELETE FROM auth_user_role WHERE user_id = ?", id);
         return jdbc.update("DELETE FROM auth_user WHERE id = ?", id) > 0;
     }
@@ -324,6 +461,7 @@ public class AuthUserRepository {
             String email,
             Long departmentId,
             String departmentName,
+            String affiliationCompany,
             Long employeeId,
             String employeeCode,
             String employeeName,

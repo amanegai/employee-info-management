@@ -1,6 +1,7 @@
 package jp.dispatch.employee.config;
 
 import jp.dispatch.employee.auth.AuthRoles;
+import jp.dispatch.employee.model.AffiliationCompanies;
 import jp.dispatch.employee.repository.AuthUserRepository;
 import org.springframework.boot.ApplicationArguments;
 import org.springframework.boot.ApplicationRunner;
@@ -33,6 +34,8 @@ public class AuthDataInitializer implements ApplicationRunner {
                 "管理者",
                 null,
                 null,
+                null,
+                null,
                 List.of(AuthRoles.ADMIN)
         );
         authUserRepository.createUser(
@@ -40,6 +43,8 @@ public class AuthDataInitializer implements ApplicationRunner {
                 passwordEncoder.encode("hr123"),
                 "人事担当",
                 null,
+                null,
+                AffiliationCompanies.BITCROSS,
                 null,
                 List.of(AuthRoles.HR)
         );

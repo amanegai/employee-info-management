@@ -15,6 +15,9 @@ public record EmployeeDto(
         int unitPrice,
         String evaluation,
         String endDate,
-        boolean evaluationCalculated
+        boolean evaluationCalculated,
+        int version,
+        String updatedAt,
+        String updatedByName
 ) {
 }

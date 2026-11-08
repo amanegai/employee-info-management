@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useState } from 'react';
 import { useLocation, useNavigate, useParams } from 'react-router-dom';
-import { api } from '../api';
+import { ApiError, api } from '../api';
 import AppFooter from '../components/AppFooter';
 import DetailTabs from '../components/detail/DetailTabs';
 import FormActionBar from '../components/detail/FormActionBar';
@@ -199,8 +199,12 @@ export default function EmployeeFormPage({ mode }) {
         });
       }
     } catch (e) {
-      showMessage(e.message, 'danger');
-      setFormError(e.message);
+      const conflict =
+        e instanceof ApiError && e.status === 409
+          ? '他のユーザーにより更新されています。最新データを再読み込みしてから保存してください'
+          : e.message;
+      showMessage(conflict, 'danger');
+      setFormError(conflict);
     } finally {
       setSaving(false);
     }

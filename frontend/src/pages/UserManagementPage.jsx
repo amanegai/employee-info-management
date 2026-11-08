@@ -6,25 +6,40 @@ import AppFooter from '../components/AppFooter';
 import PageHeader from '../components/PageHeader';
 import {
   findDepartmentIdByName,
+  isSideAssignmentRoleAllowed,
+  primaryRoleDisallowsSideAssignments,
   resolveDepartmentIdForRole,
   roleBadgeClass,
   roleDepartmentMode,
-  roleDepartmentPairHint,
   roleFixedDepartmentName,
   roleIcon,
   roleLabel,
+  roleShowsAffiliationCompany,
+  SIDE_ASSIGNMENT_ROLE_OPTIONS,
   USER_ROLE_OPTIONS,
 } from '../auth';
 import { useAppMessage } from '../context/MessageContext';
 import { useAuth } from '../context/AuthContext';
+import {
+  AFFILIATION_COMPANIES,
+  AFFILIATION_COMPANY_BITCROSS,
+} from '../utils/employeeCode';
+
+function emptyAssignment(primary = true) {
+  return {
+    role: 'DEPT_HEAD',
+    departmentId: '',
+    affiliationCompany: AFFILIATION_COMPANY_BITCROSS,
+    primary,
+  };
+}
 
 const EMPTY_FORM = {
   username: '',
   password: '',
   displayName: '',
   email: '',
-  role: 'DEPT_HEAD',
-  departmentId: '',
+  assignments: [emptyAssignment(true)],
   employeeId: '',
   employeeLabel: '',
   employeeCodeQuery: '',
@@ -36,13 +51,33 @@ function userToForm(user) {
     user.employeeId != null
       ? `${user.employeeCode || ''} ${user.employeeName || ''}`.trim()
       : '';
+  let assignments = (user.assignments ?? []).map((a, index) => ({
+    role: a.role || 'DEPT_HEAD',
+    departmentId: a.departmentId != null ? String(a.departmentId) : '',
+    affiliationCompany: roleShowsAffiliationCompany(a.role)
+      ? a.affiliationCompany || AFFILIATION_COMPANY_BITCROSS
+      : '',
+    primary: Boolean(a.primary) || (index === 0 && !(user.assignments ?? []).some((x) => x.primary)),
+  }));
+  if (assignments.length === 0) {
+    const role = user.roles?.[0] || 'DEPT_HEAD';
+    assignments = [
+      {
+        role,
+        departmentId: user.departmentId != null ? String(user.departmentId) : '',
+        affiliationCompany: roleShowsAffiliationCompany(role)
+          ? user.affiliationCompany || AFFILIATION_COMPANY_BITCROSS
+          : '',
+        primary: true,
+      },
+    ];
+  }
   return {
     username: user.username,
     password: '',
     displayName: user.displayName || '',
     email: user.email || '',
-    role: user.roles?.[0] || 'DEPT_HEAD',
-    departmentId: user.departmentId != null ? String(user.departmentId) : '',
+    assignments,
     employeeId: user.employeeId != null ? String(user.employeeId) : '',
     employeeLabel: linked,
     employeeCodeQuery: '',
@@ -62,64 +97,176 @@ export default function UserManagementPage() {
   const [form, setForm] = useState(EMPTY_FORM);
   const [passwordVisible, setPasswordVisible] = useState(false);
   const [employeeLookupLoading, setEmployeeLookupLoading] = useState(false);
-
-  const departmentMode = useMemo(() => roleDepartmentMode(form.role), [form.role]);
-  const fixedDepartmentName = useMemo(() => roleFixedDepartmentName(form.role), [form.role]);
-  const fixedDepartment = useMemo(() => {
-    if (!fixedDepartmentName) return null;
-    return departments.find((d) => d.name === fixedDepartmentName) ?? null;
-  }, [departments, fixedDepartmentName]);
-  const selectedRoleOption = useMemo(
-    () => USER_ROLE_OPTIONS.find((o) => o.value === form.role),
-    [form.role],
-  );
+  const [employeeLookupResults, setEmployeeLookupResults] = useState([]);
+  const [employeeLookupError, setEmployeeLookupError] = useState('');
+  const [employeeLookupHint, setEmployeeLookupHint] = useState('');
+  const [formError, setFormError] = useState('');
+  const [companyOptions, setCompanyOptions] = useState(AFFILIATION_COMPANIES);
 
   useEffect(() => {
-    if (!modalOpen || departmentMode !== 'fixed' || !fixedDepartment) return;
-    const nextId = String(fixedDepartment.id);
-    if (form.departmentId !== nextId) {
-      setForm((prev) => ({ ...prev, departmentId: nextId }));
-    }
-  }, [modalOpen, departmentMode, fixedDepartment, form.departmentId]);
+    if (!modalOpen || departments.length === 0) return;
+    setForm((prev) => {
+      let changed = false;
+      const nextAssignments = prev.assignments.map((row) => {
+        const mode = roleDepartmentMode(row.role);
+        if (mode !== 'fixed') return row;
+        const fixedName = roleFixedDepartmentName(row.role);
+        const company = roleShowsAffiliationCompany(row.role) ? row.affiliationCompany : null;
+        const id = findDepartmentIdByName(departments, fixedName, company);
+        const nextId = id != null ? String(id) : '';
+        if (row.departmentId === nextId) return row;
+        changed = true;
+        return { ...row, departmentId: nextId };
+      });
+      return changed ? { ...prev, assignments: nextAssignments } : prev;
+    });
+  }, [modalOpen, departments]);
 
-  function handleRoleChange(role) {
-    const mode = roleDepartmentMode(role);
-    let departmentId = '';
-    if (mode === 'fixed') {
-      const id = findDepartmentIdByName(departments, roleFixedDepartmentName(role));
-      departmentId = id != null ? String(id) : '';
+  function clearEmployeeLookupUi() {
+    setEmployeeLookupResults([]);
+    setEmployeeLookupError('');
+    setEmployeeLookupHint('');
+  }
+
+  function updateAssignment(index, patch) {
+    setForm((prev) => {
+      let assignments = prev.assignments.map((row, i) => {
+        if (i !== index) return row;
+        const next = { ...row, ...patch };
+        if (!next.primary && patch.role != null && !isSideAssignmentRoleAllowed(next.role)) {
+          next.role = 'DEPT_HEAD';
+        }
+        if (patch.role != null || patch.affiliationCompany != null) {
+          const mode = roleDepartmentMode(next.role);
+          if (mode === 'fixed') {
+            const id = findDepartmentIdByName(
+              departments,
+              roleFixedDepartmentName(next.role),
+              roleShowsAffiliationCompany(next.role) ? next.affiliationCompany : null,
+            );
+            next.departmentId = id != null ? String(id) : '';
+          } else if (mode === 'none') {
+            next.departmentId = '';
+            if (!roleShowsAffiliationCompany(next.role)) {
+              next.affiliationCompany = '';
+            }
+          }
+          if (roleShowsAffiliationCompany(next.role) && !next.affiliationCompany) {
+            next.affiliationCompany = AFFILIATION_COMPANY_BITCROSS;
+          }
+        }
+        return next;
+      });
+
+      const primary = assignments.find((a) => a.primary) || assignments[0];
+      if (primary && primaryRoleDisallowsSideAssignments(primary.role) && assignments.length > 1) {
+        assignments = assignments.filter((a) => a.primary).map((a) => ({ ...a, primary: true }));
+      }
+      return { ...prev, assignments };
+    });
+  }
+
+  function addAssignment() {
+    setForm((prev) => {
+      const primary = prev.assignments.find((a) => a.primary) || prev.assignments[0];
+      if (primary && primaryRoleDisallowsSideAssignments(primary.role)) {
+        return prev;
+      }
+      return {
+        ...prev,
+        assignments: [...prev.assignments, emptyAssignment(false)],
+      };
+    });
+  }
+
+  const primaryAssignment = useMemo(
+    () => form.assignments.find((a) => a.primary) || form.assignments[0],
+    [form.assignments],
+  );
+  const canAddSideAssignment = useMemo(
+    () => !primaryRoleDisallowsSideAssignments(primaryAssignment?.role),
+    [primaryAssignment],
+  );
+
+  function removeAssignment(index) {
+    setForm((prev) => {
+      if (prev.assignments.length <= 1) return prev;
+      const removed = prev.assignments[index];
+      let assignments = prev.assignments.filter((_, i) => i !== index);
+      if (removed.primary && assignments.length > 0) {
+        assignments = assignments.map((row, i) => ({ ...row, primary: i === 0 }));
+      }
+      return { ...prev, assignments };
+    });
+  }
+
+  function setPrimaryAssignment(index) {
+    setForm((prev) => {
+      let assignments = prev.assignments.map((row, i) => ({ ...row, primary: i === index }));
+      const primary = assignments[index];
+      if (primary && primaryRoleDisallowsSideAssignments(primary.role) && assignments.length > 1) {
+        assignments = [{ ...primary, primary: true }];
+      }
+      return { ...prev, assignments };
+    });
+  }
+
+  function departmentsForAssignment(row) {
+    if (!roleShowsAffiliationCompany(row.role) || !row.affiliationCompany) {
+      return departments;
     }
-    setForm((prev) => ({ ...prev, role, departmentId }));
+    const company = row.affiliationCompany;
+    return departments.filter((d) => normalizeCompany(d.company) === normalizeCompany(company));
+  }
+
+  function normalizeCompany(value) {
+    return (value || '').trim();
   }
 
   async function handleEmployeeLookup() {
-    const code = form.employeeCodeQuery.trim();
-    if (!code) {
-      showMessage('社員番号を入力してください', 'warning');
+    const keyword = form.employeeCodeQuery.trim();
+    clearEmployeeLookupUi();
+    if (!keyword) {
+      setEmployeeLookupError('社員番号または氏名を入力してください');
       return;
     }
     setEmployeeLookupLoading(true);
     try {
-      const list = await api.searchEmployees({ employeeCode: code });
-      const exact = (list ?? []).find(
-        (emp) => String(emp.employeeCode).toLowerCase() === code.toLowerCase()
-      );
-      if (!exact) {
-        showMessage(`社員番号「${code}」は見つかりませんでした`, 'danger');
+      const list = await api.searchEmployees({ keyword });
+      const results = list ?? [];
+      if (results.length === 0) {
+        setEmployeeLookupError(`「${keyword}」に該当する社員が見つかりませんでした`);
         return;
       }
-      setForm((prev) => ({
-        ...prev,
-        employeeId: String(exact.id),
-        employeeLabel: `${exact.employeeCode} ${exact.name}`,
-        employeeCodeQuery: '',
-      }));
-      showMessage(`「${exact.employeeCode} ${exact.name}」を連携しました`);
+      if (results.length === 1) {
+        const emp = results[0];
+        setForm((prev) => ({
+          ...prev,
+          employeeId: String(emp.id),
+          employeeLabel: `${emp.employeeCode} ${emp.name}`,
+          employeeCodeQuery: '',
+        }));
+        setEmployeeLookupHint(`「${emp.employeeCode} ${emp.name}」を連携しました`);
+        return;
+      }
+      setEmployeeLookupResults(results);
+      setEmployeeLookupHint(`${results.length}件見つかりました。一覧から選択してください`);
     } catch (err) {
-      showMessage(err.message, 'danger');
+      setEmployeeLookupError(err.message || '検索に失敗しました');
     } finally {
       setEmployeeLookupLoading(false);
     }
+  }
+
+  function selectEmployeeLink(emp) {
+    setForm((prev) => ({
+      ...prev,
+      employeeId: String(emp.id),
+      employeeLabel: `${emp.employeeCode} ${emp.name}`,
+      employeeCodeQuery: '',
+    }));
+    clearEmployeeLookupUi();
+    setEmployeeLookupHint(`「${emp.employeeCode} ${emp.name}」を連携しました`);
   }
 
   function clearEmployeeLink() {
@@ -129,6 +276,7 @@ export default function UserManagementPage() {
       employeeLabel: '',
       employeeCodeQuery: '',
     }));
+    clearEmployeeLookupUi();
   }
 
   const loadData = useCallback(async () => {
@@ -137,6 +285,9 @@ export default function UserManagementPage() {
       const [userList, master] = await Promise.all([api.listUsers(), api.getMaster()]);
       setUsers(userList);
       setDepartments(master.departments ?? []);
+      setCompanyOptions(
+        master.affiliationCompanies?.length ? master.affiliationCompanies : AFFILIATION_COMPANIES,
+      );
     } catch (e) {
       showMessage(e.message, 'danger');
     } finally {
@@ -152,6 +303,8 @@ export default function UserManagementPage() {
     setEditingUser(null);
     setForm(EMPTY_FORM);
     setPasswordVisible(false);
+    setFormError('');
+    clearEmployeeLookupUi();
     setModalOpen(true);
   }
 
@@ -159,6 +312,8 @@ export default function UserManagementPage() {
     setEditingUser(user);
     setForm(userToForm(user));
     setPasswordVisible(false);
+    setFormError('');
+    clearEmployeeLookupUi();
     setModalOpen(true);
   }
 
@@ -167,18 +322,82 @@ export default function UserManagementPage() {
     setEditingUser(null);
     setForm(EMPTY_FORM);
     setPasswordVisible(false);
+    setFormError('');
+    clearEmployeeLookupUi();
   }
 
   async function handleSubmit(e) {
     e.preventDefault();
+    setFormError('');
     setSaving(true);
     try {
+      if (!form.assignments?.length) {
+        throw new Error('本職または兼職を1つ以上設定してください');
+      }
+      const primaryCount = form.assignments.filter((a) => a.primary).length;
+      if (primaryCount !== 1) {
+        throw new Error('本職を1つ指定してください');
+      }
+      const primaryRow = form.assignments.find((a) => a.primary);
+      if (primaryRoleDisallowsSideAssignments(primaryRow?.role) && form.assignments.length > 1) {
+        throw new Error('管理者・一般社員の本職では兼職を設定できません');
+      }
+      const invalidSide = form.assignments.find(
+        (a) => !a.primary && !isSideAssignmentRoleAllowed(a.role),
+      );
+      if (invalidSide) {
+        throw new Error('兼職ロールは事業部長・部長・営業のみ選択できます');
+      }
+
+      const assignments = form.assignments.map((row) => {
+        const showCompany = roleShowsAffiliationCompany(row.role);
+        const mode = roleDepartmentMode(row.role);
+        const departmentId = resolveDepartmentIdForRole(
+          row.role,
+          row.departmentId,
+          departments,
+          showCompany ? row.affiliationCompany : null,
+        );
+        if (mode === 'fixed' && !departmentId) {
+          throw new Error(
+            `「${roleFixedDepartmentName(row.role)}」がマスタに登録されていません` +
+              (showCompany && row.affiliationCompany ? `（${row.affiliationCompany}）` : ''),
+          );
+        }
+        if (mode === 'select' && !departmentId) {
+          throw new Error('事業部長・部長には所属部門が必要です');
+        }
+        if (showCompany && !row.affiliationCompany) {
+          throw new Error('所属会社を選択してください');
+        }
+        return {
+          role: row.role,
+          departmentId,
+          affiliationCompany: showCompany ? row.affiliationCompany : null,
+          primary: Boolean(row.primary),
+        };
+      });
+
+      const seenKeys = new Set();
+      for (const row of assignments) {
+        const key = [
+          row.role || '',
+          row.affiliationCompany || '',
+          row.departmentId != null ? String(row.departmentId) : '',
+        ].join('|');
+        if (seenKeys.has(key)) {
+          throw new Error(
+            '本職・兼職の内容が重複しています（同じ会社・ロール・部門は設定できません）',
+          );
+        }
+        seenKeys.add(key);
+      }
+
       const payload = {
         username: form.username.trim(),
         displayName: form.displayName.trim(),
         email: form.email.trim(),
-        roles: [form.role],
-        departmentId: resolveDepartmentIdForRole(form.role, form.departmentId, departments),
+        assignments,
         employeeId: form.employeeId ? Number(form.employeeId) : null,
         enabled: form.enabled,
       };
@@ -186,12 +405,6 @@ export default function UserManagementPage() {
         payload.password = form.password;
       } else if (!editingUser) {
         throw new Error('パスワードを入力してください');
-      }
-      if (departmentMode === 'fixed' && !payload.departmentId) {
-        throw new Error(`「${fixedDepartmentName}」がマスタに登録されていません`);
-      }
-      if (departmentMode === 'select' && !payload.departmentId) {
-        throw new Error('所属部門を選択してください');
       }
       if (editingUser) {
         await api.updateUser(editingUser.id, payload);
@@ -206,7 +419,7 @@ export default function UserManagementPage() {
         await refreshUser();
       }
     } catch (err) {
-      showMessage(err.message, 'danger');
+      setFormError(err.message || '保存に失敗しました');
     } finally {
       setSaving(false);
     }
@@ -273,6 +486,7 @@ export default function UserManagementPage() {
                   <th>表示名</th>
                   <th>メール</th>
                   <th>ロール</th>
+                  <th>所属会社</th>
                   <th>所属部門</th>
                   <th>連携社員</th>
                   <th>2FA</th>
@@ -317,17 +531,35 @@ export default function UserManagementPage() {
                       </td>
                       <td>
                         <div className="user-mgmt-role-list">
-                          {(user.roles ?? []).map((role) => (
+                          {(user.assignments?.length
+                            ? user.assignments
+                            : (user.roles ?? []).map((role) => ({ role, primary: true }))
+                          ).map((assignment, idx) => (
                             <span
-                              key={role}
-                              className={`user-mgmt-role-badge ${roleBadgeClass(role)}`}
-                              title={roleLabel(role)}
+                              key={`${assignment.role}-${idx}`}
+                              className={`user-mgmt-role-badge ${roleBadgeClass(assignment.role)}`}
+                              title={
+                                assignment.affiliationCompany
+                                  ? `${roleLabel(assignment.role)} / ${assignment.affiliationCompany}`
+                                  : roleLabel(assignment.role)
+                              }
                             >
-                              <i className={`bi ${roleIcon(role)}`} aria-hidden="true" />
-                              {roleLabel(role)}
+                              <i className={`bi ${roleIcon(assignment.role)}`} aria-hidden="true" />
+                              {roleLabel(assignment.role)}
+                              {assignment.primary ? '（本職）' : '（兼職）'}
                             </span>
                           ))}
                         </div>
+                      </td>
+                      <td>
+                        <span className={user.affiliationCompany ? 'user-mgmt-dept' : 'user-mgmt-empty'}>
+                          {user.affiliationCompany || '—'}
+                          {(user.assignments?.length ?? 0) > 1 && (
+                            <span className="user-mgmt-self-tag ms-1">
+                              +{user.assignments.length - 1}兼職
+                            </span>
+                          )}
+                        </span>
                       </td>
                       <td>
                         <span className={user.departmentName ? 'user-mgmt-dept' : 'user-mgmt-empty'}>
@@ -564,85 +796,173 @@ export default function UserManagementPage() {
                     <section className="user-form-section" aria-labelledby="userFormSectionAccess">
                       <h3 className="user-form-section-title" id="userFormSectionAccess">
                         <i className="bi bi-sliders" aria-hidden="true" />
-                        権限・所属
+                        権限・所属（本職／兼職）
                       </h3>
-                      <div
-                        className={`user-form-grid${
-                          departmentMode !== 'none' ? ' user-form-grid-2' : ''
-                        }`}
-                      >
-                        <div className="user-form-field">
-                          <label htmlFor="userRole" className="form-label user-form-label">
-                            ロール
-                          </label>
-                          <div className="user-form-select-wrap">
-                            {selectedRoleOption && (
-                              <i
-                                className={`bi ${roleIcon(form.role)} user-form-select-icon`}
-                                aria-hidden="true"
-                              />
-                            )}
-                            <select
-                              id="userRole"
-                              className="form-select user-form-select-with-icon user-form-control-paired"
-                              value={form.role}
-                              onChange={(e) => handleRoleChange(e.target.value)}
-                              required
+                      <p className="user-form-role-hint mb-2">
+                        跨会社の兼職は権限側のみ設定します。閲覧範囲は各行の和集合です。
+                      </p>
+                      <div className="d-flex flex-column gap-3 mb-3">
+                        {form.assignments.map((row, index) => {
+                          const mode = roleDepartmentMode(row.role);
+                          const showCompany = roleShowsAffiliationCompany(row.role);
+                          const fixedName = roleFixedDepartmentName(row.role);
+                          const deptOptions = departmentsForAssignment(row);
+                          const fixedDept = fixedName
+                            ? deptOptions.find((d) => d.name === fixedName) ?? null
+                            : null;
+                          return (
+                            <div
+                              key={`assignment-${index}`}
+                              className="user-form-status-card"
+                              style={{ flexDirection: 'column', alignItems: 'stretch', gap: '0.75rem' }}
                             >
-                              {USER_ROLE_OPTIONS.map((option) => (
-                                <option key={option.value} value={option.value}>
-                                  {option.label}
-                                </option>
-                              ))}
-                            </select>
-                          </div>
-                          {selectedRoleOption && (
-                            <p className="user-form-role-hint">
-                              <span className={`user-mgmt-role-badge ${roleBadgeClass(form.role)}`}>
-                                <i className={`bi ${roleIcon(form.role)}`} aria-hidden="true" />
-                                {selectedRoleOption.label}
-                              </span>
-                              {departmentMode === 'fixed' && roleDepartmentPairHint(form.role) ? (
-                                <> — {roleDepartmentPairHint(form.role)} に固定</>
-                              ) : departmentMode === 'select' ? (
-                                <> — 所属部門の指定が必要です</>
-                              ) : (
-                                <> の権限が付与されます</>
-                              )}
-                            </p>
-                          )}
-                        </div>
-                        {departmentMode === 'fixed' && (
-                          <div className="user-form-field user-form-field-animated">
-                            <div className="user-form-dept-label-row">
-                              <span className="user-form-dept-label-text">所属部門</span>
-                              <span className="user-form-label-badge">
-                                <i className="bi bi-link-45deg" aria-hidden="true" />
-                                ロール連動
-                              </span>
+                              <div className="d-flex justify-content-between align-items-center gap-2 flex-wrap">
+                                <div className="d-flex align-items-center gap-2">
+                                  <span className={`user-mgmt-role-badge ${roleBadgeClass(row.role)}`}>
+                                    <i className={`bi ${roleIcon(row.role)}`} aria-hidden="true" />
+                                    {row.primary ? '本職' : `兼職 ${index}`}
+                                  </span>
+                                  <label className="form-check-label d-flex align-items-center gap-1 mb-0">
+                                    <input
+                                      type="radio"
+                                      className="form-check-input"
+                                      name="primaryAssignment"
+                                      checked={Boolean(row.primary)}
+                                      onChange={() => setPrimaryAssignment(index)}
+                                    />
+                                    本職にする
+                                  </label>
+                                </div>
+                                <button
+                                  type="button"
+                                  className="btn btn-sm btn-outline-danger"
+                                  disabled={form.assignments.length <= 1}
+                                  onClick={() => removeAssignment(index)}
+                                >
+                                  削除
+                                </button>
+                              </div>
+                              <div className="user-form-grid user-form-grid-2">
+                                <div className="user-form-field">
+                                  <label className="form-label user-form-label" htmlFor={`userRole-${index}`}>
+                                    ロール
+                                  </label>
+                                  <select
+                                    id={`userRole-${index}`}
+                                    className="form-select"
+                                    value={row.role}
+                                    onChange={(e) => updateAssignment(index, { role: e.target.value })}
+                                    required
+                                  >
+                                    {(row.primary ? USER_ROLE_OPTIONS : SIDE_ASSIGNMENT_ROLE_OPTIONS).map(
+                                      (option) => (
+                                        <option key={option.value} value={option.value}>
+                                          {option.label}
+                                        </option>
+                                      ),
+                                    )}
+                                  </select>
+                                </div>
+                                {showCompany && (
+                                  <div className="user-form-field">
+                                    <label
+                                      className="form-label user-form-label"
+                                      htmlFor={`userCompany-${index}`}
+                                    >
+                                      所属会社
+                                      <span className="user-form-label-required">必須</span>
+                                    </label>
+                                    <select
+                                      id={`userCompany-${index}`}
+                                      className="form-select"
+                                      value={row.affiliationCompany}
+                                      onChange={(e) =>
+                                        updateAssignment(index, { affiliationCompany: e.target.value })
+                                      }
+                                      required
+                                    >
+                                      {companyOptions.map((company) => (
+                                        <option key={company} value={company}>
+                                          {company}
+                                        </option>
+                                      ))}
+                                    </select>
+                                  </div>
+                                )}
+                                {mode === 'fixed' && (
+                                  <div className="user-form-field" style={{ gridColumn: '1 / -1' }}>
+                                    {fixedDept ? (
+                                      <div className="user-form-dept-binding">
+                                        <span className="user-form-dept-binding-dept">
+                                          <i className="bi bi-building" aria-hidden="true" />
+                                          {fixedDept.name}
+                                          {showCompany && row.affiliationCompany
+                                            ? `（${row.affiliationCompany}）`
+                                            : ''}
+                                        </span>
+                                      </div>
+                                    ) : (
+                                      <div className="user-form-callout user-form-callout-warning">
+                                        <i className="bi bi-exclamation-triangle" aria-hidden="true" />
+                                        <p className="user-form-callout-text mb-0">
+                                          マスタに「{fixedName}」がありません。
+                                        </p>
+                                      </div>
+                                    )}
+                                  </div>
+                                )}
+                                {mode === 'select' && (
+                                  <div className="user-form-field" style={{ gridColumn: showCompany ? undefined : '1 / -1' }}>
+                                    <label
+                                      className="form-label user-form-label"
+                                      htmlFor={`userDept-${index}`}
+                                    >
+                                      所属部門
+                                      <span className="user-form-label-required">必須</span>
+                                    </label>
+                                    <select
+                                      id={`userDept-${index}`}
+                                      className="form-select"
+                                      value={row.departmentId}
+                                      onChange={(e) =>
+                                        updateAssignment(index, { departmentId: e.target.value })
+                                      }
+                                      required
+                                    >
+                                      <option value="">選択してください</option>
+                                      {deptOptions.map((dept) => (
+                                        <option key={dept.id} value={dept.id}>
+                                          {dept.name}
+                                          {dept.company ? `（${dept.company}）` : ''}
+                                        </option>
+                                      ))}
+                                    </select>
+                                  </div>
+                                )}
+                              </div>
                             </div>
-                            {fixedDepartment ? (
-                              <div className="user-form-dept-binding" aria-label={roleDepartmentPairHint(form.role)}>
-                                <span className={`user-mgmt-role-badge ${roleBadgeClass(form.role)}`}>
-                                  <i className={`bi ${roleIcon(form.role)}`} aria-hidden="true" />
-                                  {selectedRoleOption?.label}
-                                </span>
-                                <i className="bi bi-arrow-right user-form-dept-binding-arrow" aria-hidden="true" />
-                                <span className="user-form-dept-binding-dept">
-                                  <i className="bi bi-building" aria-hidden="true" />
-                                  {fixedDepartment.name}
-                                </span>
-                              </div>
-                            ) : (
-                              <div className="user-form-callout user-form-callout-warning">
-                                <i className="bi bi-exclamation-triangle" aria-hidden="true" />
-                                <p className="user-form-callout-text mb-0">
-                                  マスタに「{fixedDepartmentName}」がありません。部門マスタを確認してください。
-                                </p>
-                              </div>
-                            )}
-                          </div>
-                        )}
+                          );
+                        })}
+                      </div>
+                      <button
+                        type="button"
+                        className="btn btn-outline-primary btn-sm mb-3"
+                        onClick={addAssignment}
+                        disabled={!canAddSideAssignment}
+                        title={
+                          canAddSideAssignment
+                            ? undefined
+                            : '管理者・一般社員の本職では兼職を追加できません'
+                        }
+                      >
+                        <i className="bi bi-plus-lg" aria-hidden="true" /> 兼職を追加
+                      </button>
+                      {!canAddSideAssignment && (
+                        <p className="user-form-role-hint mb-3">
+                          本職が管理者または一般社員の場合、兼職は追加できません。
+                        </p>
+                      )}
+                      <div className="user-form-grid user-form-grid-2">
                         <div className="user-form-field" style={{ gridColumn: '1 / -1' }}>
                           <label htmlFor="userEmployeeCode" className="form-label user-form-label">
                             連携社員（MyPage）
@@ -663,61 +983,85 @@ export default function UserManagementPage() {
                               </button>
                             </div>
                           ) : (
-                            <div className="d-flex gap-2">
-                              <div className="user-form-input-wrap flex-grow-1">
-                                <i className="bi bi-search user-form-input-icon" aria-hidden="true" />
-                                <input
-                                  id="userEmployeeCode"
-                                  type="text"
-                                  className="form-control user-form-input-with-icon"
-                                  value={form.employeeCodeQuery}
-                                  onChange={(e) =>
-                                    setForm({ ...form, employeeCodeQuery: e.target.value })
-                                  }
-                                  placeholder="社員番号で検索（例: btcS00001）"
-                                />
+                            <>
+                              <div className="d-flex gap-2">
+                                <div className="user-form-input-wrap flex-grow-1">
+                                  <i className="bi bi-search user-form-input-icon" aria-hidden="true" />
+                                  <input
+                                    id="userEmployeeCode"
+                                    type="text"
+                                    className="form-control user-form-input-with-icon"
+                                    value={form.employeeCodeQuery}
+                                    onChange={(e) => {
+                                      setForm({ ...form, employeeCodeQuery: e.target.value });
+                                      clearEmployeeLookupUi();
+                                    }}
+                                    onKeyDown={(e) => {
+                                      if (e.key === 'Enter') {
+                                        e.preventDefault();
+                                        void handleEmployeeLookup();
+                                      }
+                                    }}
+                                    placeholder="社員番号・氏名の一部で検索"
+                                  />
+                                </div>
+                                <button
+                                  type="button"
+                                  className="btn btn-outline-primary app-btn"
+                                  onClick={handleEmployeeLookup}
+                                  disabled={employeeLookupLoading}
+                                >
+                                  {employeeLookupLoading ? '検索中…' : '検索'}
+                                </button>
                               </div>
-                              <button
-                                type="button"
-                                className="btn btn-outline-primary app-btn"
-                                onClick={handleEmployeeLookup}
-                                disabled={employeeLookupLoading}
-                              >
-                                {employeeLookupLoading ? '検索中…' : '検索'}
-                              </button>
-                            </div>
+                              {employeeLookupResults.length > 0 && (
+                                <div className="user-form-employee-results" role="listbox">
+                                  {employeeLookupResults.map((emp) => (
+                                    <button
+                                      key={emp.id}
+                                      type="button"
+                                      className="user-form-employee-result"
+                                      onClick={() => selectEmployeeLink(emp)}
+                                    >
+                                      <span className="user-form-employee-result-main">
+                                        {emp.employeeCode} {emp.name}
+                                      </span>
+                                      <span className="user-form-employee-result-meta">
+                                        {[emp.affiliationCompany, emp.departmentName]
+                                          .filter(Boolean)
+                                          .join(' / ') || '—'}
+                                      </span>
+                                    </button>
+                                  ))}
+                                </div>
+                              )}
+                            </>
+                          )}
+                          {employeeLookupError && (
+                            <p className="user-form-inline-error" role="alert">
+                              <i className="bi bi-exclamation-circle" aria-hidden="true" />
+                              <span>{employeeLookupError}</span>
+                            </p>
+                          )}
+                          {!employeeLookupError && employeeLookupHint && (
+                            <p className="user-form-inline-ok" role="status">
+                              <i className="bi bi-check-circle" aria-hidden="true" />
+                              <span>{employeeLookupHint}</span>
+                            </p>
                           )}
                           <p className="user-form-role-hint mb-0 mt-1">
-                            一般社員ロールでは MyPage 表示のため連携を推奨します。業務ロールでも連携できます。
+                            社員番号・氏名の一部で曖昧検索できます。一般社員ロールでは MyPage のため連携を推奨します。
                           </p>
                         </div>
-                        {departmentMode === 'select' && (
-                          <div className="user-form-field user-form-field-animated">
-                            <label htmlFor="userDepartment" className="form-label user-form-label">
-                              所属部門
-                              <span className="user-form-label-required">必須</span>
-                            </label>
-                            <div className="user-form-input-wrap">
-                              <i className="bi bi-building user-form-input-icon" aria-hidden="true" />
-                              <select
-                                id="userDepartment"
-                                className="form-select user-form-input-with-icon"
-                                value={form.departmentId}
-                                onChange={(e) => setForm({ ...form, departmentId: e.target.value })}
-                                required
-                              >
-                                <option value="">選択してください</option>
-                                {departments.map((dept) => (
-                                  <option key={dept.id} value={dept.id}>
-                                    {dept.name}
-                                  </option>
-                                ))}
-                              </select>
-                            </div>
-                          </div>
-                        )}
                       </div>
                     </section>
+
+                    {formError && (
+                      <p className="user-form-inline-error" role="alert">
+                        <i className="bi bi-exclamation-circle" aria-hidden="true" />
+                        <span>{formError}</span>
+                      </p>
+                    )}
 
                     <div className="user-form-status-card">
                       <div className="user-form-status-text">

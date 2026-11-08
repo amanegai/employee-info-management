@@ -6,10 +6,12 @@ import jp.dispatch.employee.auth.SecurityService;
 import jp.dispatch.employee.dto.EmployeeDetailDto;
 import jp.dispatch.employee.dto.EmployeeDetailDto.PersonalDto;
 import jp.dispatch.employee.dto.EmployeeDto;
+import jp.dispatch.employee.dto.CompanySummaryDto;
 import jp.dispatch.employee.dto.MyPageAdminOverviewDto;
 import jp.dispatch.employee.dto.MyPageDto;
 import jp.dispatch.employee.dto.PaidLeaveBalanceDto;
 import jp.dispatch.employee.dto.SummaryDto;
+import jp.dispatch.employee.model.AffiliationCompanies;
 import jp.dispatch.employee.repository.AppNotificationRepository;
 import jp.dispatch.employee.repository.AssignmentCancelFollowupRepository;
 import jp.dispatch.employee.repository.DispatchProjectRepository;
@@ -19,6 +21,9 @@ import jp.dispatch.employee.repository.EmployeeStatusSuggestionRepository;
 import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Service;
 import org.springframework.web.server.ResponseStatusException;
+
+import java.util.ArrayList;
+import java.util.List;
 
 @Service
 public class MyPageService {
@@ -129,16 +134,36 @@ public class MyPageService {
     }
 
     private MyPageAdminOverviewDto buildAdminOverview(long userId) {
-        SummaryDto summary = employeeRepository.fetchSummary(null);
+        List<CompanySummaryDto> companies = new ArrayList<>();
+        long totalActive = 0;
+        long totalWorking = 0;
+        long totalStandby = 0;
+        long totalEnding = 0;
+        for (String company : AffiliationCompanies.ALL) {
+            SummaryDto one = employeeRepository.fetchSummary(null, List.of(company));
+            companies.add(new CompanySummaryDto(
+                    company,
+                    false,
+                    one.activeCount(),
+                    one.workingCount(),
+                    one.standbyCount(),
+                    one.endingThisMonthCount()
+            ));
+            totalActive += one.activeCount();
+            totalWorking += one.workingCount();
+            totalStandby += one.standbyCount();
+            totalEnding += one.endingThisMonthCount();
+        }
         int cancelFollowupOpenCount = cancelFollowupRepository.countOpenVisible(userId, true);
         int bpHelpOpenCount = projectRepository.countOpenBpHelpRequests();
         int statusSuggestionPendingCount = statusSuggestionRepository.findByStatus("PENDING").size();
         int notificationUnreadCount = notificationRepository.countUnread(userId);
         return new MyPageAdminOverviewDto(
-                summary.activeCount(),
-                summary.workingCount(),
-                summary.standbyCount(),
-                summary.endingThisMonthCount(),
+                totalActive,
+                totalWorking,
+                totalStandby,
+                totalEnding,
+                companies,
                 cancelFollowupOpenCount,
                 bpHelpOpenCount,
                 statusSuggestionPendingCount,

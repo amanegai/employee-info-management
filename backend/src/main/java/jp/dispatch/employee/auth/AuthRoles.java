@@ -11,7 +11,7 @@ public final class AuthRoles {
     public static final String DIVISION_HEAD = "DIVISION_HEAD";
     /** 部長：自部門の社員のみ閲覧可 */
     public static final String DEPT_HEAD = "DEPT_HEAD";
-    /** 営業：全社員を閲覧可（人事部を除く） */
+    /** 営業：自所属会社の社員を閲覧可（人事部を除く）。案件は会社横断可 */
     public static final String SALES_HEAD = "SALES_HEAD";
 
     private AuthRoles() {

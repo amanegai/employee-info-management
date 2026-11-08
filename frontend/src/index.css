@@ -359,7 +359,162 @@ body.page-guide-is-open {
 }
 
 .summary-cards-row {
-  margin-bottom: 1.35rem !important;
+  margin-bottom: 0 !important;
+}
+
+.summary-company-stack {
+  gap: 1.15rem !important;
+}
+
+.summary-company-block {
+  padding: 0.85rem 0.9rem 1rem;
+  border: 1px solid rgba(226, 232, 240, 0.95);
+  border-radius: var(--app-radius-lg);
+  background:
+    linear-gradient(180deg, rgba(255, 255, 255, 0.92) 0%, rgba(248, 250, 252, 0.88) 100%);
+  box-shadow: var(--app-shadow-sm);
+}
+
+.summary-company-block-single {
+  margin-bottom: 0.75rem;
+  padding-bottom: 0.85rem;
+}
+
+.summary-company-heading {
+  --summary-company-accent: #334155;
+  --summary-company-soft: #f1f5f9;
+  --summary-company-ink: #0f172a;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.75rem;
+  flex-wrap: wrap;
+  margin-bottom: 0.85rem;
+  padding: 0.55rem 0.7rem 0.55rem 0.55rem;
+  border-radius: 0.85rem;
+  background: linear-gradient(90deg, var(--summary-company-soft) 0%, rgba(255, 255, 255, 0.55) 72%);
+  border: 1px solid rgba(226, 232, 240, 0.9);
+  border-left: 3px solid var(--summary-company-accent);
+}
+
+.summary-company-heading-bitcross {
+  --summary-company-accent: #0f766e;
+  --summary-company-soft: #ecfdf8;
+  --summary-company-ink: #115e59;
+}
+
+.summary-company-heading-alesis {
+  --summary-company-accent: #0369a1;
+  --summary-company-soft: #eef8ff;
+  --summary-company-ink: #075985;
+}
+
+.summary-company-heading-shuwa {
+  --summary-company-accent: #b45309;
+  --summary-company-soft: #fff7ed;
+  --summary-company-ink: #9a3412;
+}
+
+.summary-company-heading-default {
+  --summary-company-accent: #475569;
+  --summary-company-soft: #f8fafc;
+  --summary-company-ink: #1e293b;
+}
+
+.summary-company-heading-main {
+  display: flex;
+  align-items: center;
+  gap: 0.7rem;
+  min-width: 0;
+}
+
+.summary-company-heading-icon {
+  flex-shrink: 0;
+  width: 2.35rem;
+  height: 2.35rem;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 0.7rem;
+  color: var(--summary-company-accent);
+  background: rgba(255, 255, 255, 0.85);
+  border: 1px solid color-mix(in srgb, var(--summary-company-accent) 22%, white);
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.9);
+  font-size: 1.05rem;
+}
+
+.summary-company-heading-text {
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 0.08rem;
+}
+
+.summary-company-heading-eyebrow {
+  font-size: 0.68rem;
+  font-weight: 600;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--app-text-subtle);
+  line-height: 1.2;
+}
+
+.summary-company-heading-title {
+  margin: 0;
+  font-size: 1.02rem;
+  font-weight: 700;
+  letter-spacing: 0.01em;
+  color: var(--summary-company-ink);
+  line-height: 1.25;
+}
+
+.summary-company-heading-meta {
+  display: flex;
+  align-items: center;
+  gap: 0.4rem;
+  flex-wrap: wrap;
+}
+
+.summary-company-code {
+  display: inline-flex;
+  align-items: center;
+  min-height: 1.55rem;
+  padding: 0.12rem 0.55rem;
+  border-radius: 0.45rem;
+  font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+  font-size: 0.72rem;
+  font-weight: 700;
+  letter-spacing: 0.06em;
+  color: var(--summary-company-accent);
+  background: rgba(255, 255, 255, 0.88);
+  border: 1px solid color-mix(in srgb, var(--summary-company-accent) 24%, white);
+}
+
+.summary-company-primary-badge {
+  display: inline-flex;
+  align-items: center;
+  min-height: 1.55rem;
+  padding: 0.12rem 0.55rem;
+  border-radius: 999px;
+  font-size: 0.7rem;
+  font-weight: 700;
+  color: #0f766e;
+  background: rgba(255, 255, 255, 0.9);
+  border: 1px solid rgba(45, 212, 191, 0.55);
+}
+
+@media (max-width: 575.98px) {
+  .summary-company-block {
+    padding: 0.7rem 0.65rem 0.85rem;
+  }
+
+  .summary-company-heading {
+    padding: 0.5rem 0.55rem;
+  }
+
+  .summary-company-heading-title {
+    font-size: 0.95rem;
+  }
 }
 
 .summary-card {
@@ -428,6 +583,11 @@ body.page-guide-is-open {
 .summary-card-btn {
   cursor: pointer;
   border: none;
+}
+
+.summary-card-static {
+  cursor: default;
+  pointer-events: none;
 }
 
 .summary-card-btn:disabled {
@@ -856,7 +1016,7 @@ body.page-guide-is-open {
 .employee-list-table {
   table-layout: fixed;
   width: 100%;
-  min-width: 980px;
+  min-width: 860px;
   margin-bottom: 0;
 }
 
@@ -885,20 +1045,56 @@ body.page-guide-is-open {
   white-space: nowrap;
 }
 
+.employee-list-cell-stack {
+  padding-top: 0.55rem;
+  padding-bottom: 0.55rem;
+}
+
+.employee-list-cell-primary {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-weight: 600;
+  color: #0f172a;
+  line-height: 1.25;
+}
+
+.employee-list-name-line {
+  display: block;
+}
+
+.employee-list-kana {
+  margin-left: 0.2rem;
+  font-weight: 500;
+  font-size: 0.86em;
+  color: #64748b;
+}
+
+.employee-list-cell-secondary {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  margin-top: 0.15rem;
+  font-size: 0.78rem;
+  line-height: 1.25;
+  color: #64748b;
+}
+
+.employee-list-cell-audit-time {
+  font-variant-numeric: tabular-nums;
+  letter-spacing: 0.01em;
+}
+
 .employee-list-col-checkbox {
-  width: 3rem;
+  width: 2.75rem;
 }
 
-.employee-list-col-id {
-  width: 6.5rem;
+.employee-list-col-person {
+  width: 14.5rem;
 }
 
-.employee-list-col-name {
+.employee-list-col-company {
   width: 8rem;
-}
-
-.employee-list-col-kana {
-  width: 9rem;
 }
 
 .employee-list-col-dept {
@@ -906,27 +1102,31 @@ body.page-guide-is-open {
 }
 
 .employee-list-col-position {
-  width: 7rem;
+  width: 7.5rem;
 }
 
 .employee-list-col-type {
-  width: 7.5rem;
+  width: 6.5rem;
 }
 
 .employee-list-col-status {
-  width: 7.5rem;
-}
-
-.employee-list-col-price {
   width: 7rem;
 }
 
+.employee-list-col-price {
+  width: 6.5rem;
+}
+
 .employee-list-col-eval {
-  width: 5rem;
+  width: 4.5rem;
+}
+
+.employee-list-col-audit {
+  width: 9.5rem;
 }
 
 .employee-list-col-action {
-  width: 6.5rem;
+  width: 5.5rem;
 }
 
 .employee-list-action-col {
@@ -5156,7 +5356,82 @@ body.page-guide-is-open {
 }
 
 .user-form-modal-dialog {
-  max-width: 36rem;
+  max-width: 48rem;
+  width: calc(100% - 1.5rem);
+}
+
+.user-form-employee-results {
+  margin-top: 0.5rem;
+  border: 1px solid var(--app-border, #e2e8f0);
+  border-radius: 0.5rem;
+  max-height: 12rem;
+  overflow: auto;
+  background: #fff;
+}
+
+.user-form-employee-result {
+  display: flex;
+  flex-direction: column;
+  gap: 0.1rem;
+  width: 100%;
+  text-align: left;
+  border: 0;
+  border-bottom: 1px solid var(--app-border, #e2e8f0);
+  background: transparent;
+  padding: 0.55rem 0.75rem;
+  cursor: pointer;
+}
+
+.user-form-employee-result:last-child {
+  border-bottom: 0;
+}
+
+.user-form-employee-result:hover,
+.user-form-employee-result:focus-visible {
+  background: #f8fafc;
+  outline: none;
+}
+
+.user-form-employee-result-main {
+  font-size: 0.9rem;
+  font-weight: 600;
+  color: #0f172a;
+}
+
+.user-form-employee-result-meta {
+  font-size: 0.78rem;
+  color: #64748b;
+}
+
+.user-form-inline-error {
+  display: flex;
+  align-items: flex-start;
+  gap: 0.35rem;
+  margin: 0.5rem 0 0;
+  padding: 0.45rem 0.65rem;
+  border-radius: 0.4rem;
+  background: #fef2f2;
+  color: #b91c1c;
+  font-size: 0.82rem;
+  line-height: 1.4;
+}
+
+.user-form-inline-error > i {
+  margin-top: 0.1rem;
+  flex-shrink: 0;
+}
+
+.user-form-inline-ok {
+  display: flex;
+  align-items: flex-start;
+  gap: 0.35rem;
+  margin: 0.5rem 0 0;
+  padding: 0.45rem 0.65rem;
+  border-radius: 0.4rem;
+  background: #ecfdf5;
+  color: #047857;
+  font-size: 0.82rem;
+  line-height: 1.4;
 }
 
 .user-form-modal-content {
@@ -20338,6 +20613,54 @@ body.page-guide-is-open {
   font-size: 0.78rem;
   font-weight: 500;
   color: #94a3b8;
+}
+
+.mypage-info-label-row {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.35rem 0.5rem;
+}
+
+.mypage-paid-leave-help-btn {
+  --bs-btn-padding-x: 0.15rem;
+  --bs-btn-padding-y: 0;
+  display: inline-flex;
+  align-items: center;
+  gap: 0.2rem;
+  font-size: 0.78rem;
+  font-weight: 600;
+  line-height: 1.2;
+  text-decoration: none;
+  white-space: nowrap;
+}
+
+.mypage-paid-leave-help-btn i {
+  font-size: 0.9em;
+}
+
+.mypage-paid-leave-help-list {
+  display: grid;
+  gap: 0.85rem;
+}
+
+.mypage-paid-leave-help-item {
+  display: grid;
+  gap: 0.2rem;
+}
+
+.mypage-paid-leave-help-item dt {
+  margin: 0;
+  font-size: 0.8rem;
+  font-weight: 700;
+  color: #475569;
+}
+
+.mypage-paid-leave-help-item dd {
+  margin: 0;
+  font-size: 0.92rem;
+  line-height: 1.5;
+  color: #0f172a;
 }
 
 .mypage-coming-soon-badge {

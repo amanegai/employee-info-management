@@ -8,7 +8,7 @@ import jp.dispatch.employee.dto.EmployeePayrollSlipDto;
 import jp.dispatch.employee.dto.EmployeeSaveRequest;
 import jp.dispatch.employee.dto.MasterDto;
 import jp.dispatch.employee.dto.NextEmployeeCodeDto;
-import jp.dispatch.employee.dto.SummaryDto;
+import jp.dispatch.employee.dto.SummaryResponseDto;
 import jp.dispatch.employee.service.EmployeeService;
 import jp.dispatch.employee.service.ResumeExcelExportService.ResumeExcelFile;
 import org.springframework.core.io.ByteArrayResource;
@@ -33,7 +33,7 @@ public class EmployeeController {
     }
 
     @GetMapping("/summary")
-    public SummaryDto summary() {
+    public SummaryResponseDto summary() {
         return service.getSummary();
     }
 

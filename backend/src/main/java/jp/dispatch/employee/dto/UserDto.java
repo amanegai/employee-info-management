@@ -8,8 +8,10 @@ public record UserDto(
         String displayName,
         List<String> roles,
         Long departmentId,
+        String affiliationCompany,
         Long employeeId,
         boolean totpEnabled,
-        int recoveryCodesRemaining
+        int recoveryCodesRemaining,
+        List<AuthUserAssignmentDto> assignments
 ) {
 }

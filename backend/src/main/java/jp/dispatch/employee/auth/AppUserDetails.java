@@ -14,9 +14,11 @@ public class AppUserDetails implements UserDetails {
     private final String passwordHash;
     private final String displayName;
     private final Long departmentId;
+    private final String affiliationCompany;
     private final Long employeeId;
     private final boolean enabled;
     private final List<String> roles;
+    private final List<UserAssignment> assignments;
 
     public AppUserDetails(
             long id,
@@ -24,18 +26,36 @@ public class AppUserDetails implements UserDetails {
             String passwordHash,
             String displayName,
             Long departmentId,
+            String affiliationCompany,
             Long employeeId,
             boolean enabled,
             List<String> roles
+    ) {
+        this(id, username, passwordHash, displayName, departmentId, affiliationCompany, employeeId, enabled, roles, List.of());
+    }
+
+    public AppUserDetails(
+            long id,
+            String username,
+            String passwordHash,
+            String displayName,
+            Long departmentId,
+            String affiliationCompany,
+            Long employeeId,
+            boolean enabled,
+            List<String> roles,
+            List<UserAssignment> assignments
     ) {
         this.id = id;
         this.username = username;
         this.passwordHash = passwordHash;
         this.displayName = displayName;
         this.departmentId = departmentId;
+        this.affiliationCompany = affiliationCompany;
         this.employeeId = employeeId;
         this.enabled = enabled;
-        this.roles = roles;
+        this.roles = roles != null ? List.copyOf(roles) : List.of();
+        this.assignments = assignments != null ? List.copyOf(assignments) : List.of();
     }
 
     public long getId() {
@@ -50,12 +70,20 @@ public class AppUserDetails implements UserDetails {
         return departmentId;
     }
 
+    public String getAffiliationCompany() {
+        return affiliationCompany;
+    }
+
     public Long getEmployeeId() {
         return employeeId;
     }
 
     public List<String> getRoles() {
         return roles;
+    }
+
+    public List<UserAssignment> getAssignments() {
+        return assignments;
     }
 
     @Override
