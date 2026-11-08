@@ -23,50 +23,120 @@ function InfoCell({ label, value, labelAction = null }) {
   );
 }
 
+const PAID_LEAVE_HELP_ITEMS = [
+  {
+    key: 'target',
+    label: '対象',
+    icon: 'bi-person-check',
+    tone: 'teal',
+    body: '正社員のみ対象です。',
+  },
+  {
+    key: 'start',
+    label: '起算',
+    icon: 'bi-calendar2-event',
+    tone: 'sky',
+    body: '入社日を基準に計算します。',
+    steps: ['入社日', '＋6か月で初回付与', '以降は毎年同日'],
+  },
+  {
+    key: 'days',
+    label: '日数',
+    icon: 'bi-stack',
+    tone: 'amber',
+    body: '勤続に応じて付与日数が増えます。',
+    chips: [
+      { label: '6か月', value: '10日' },
+      { label: '1年6か月', value: '11日' },
+      { label: '2年6か月', value: '12日' },
+      { label: '3年6か月', value: '14日' },
+      { label: '4年6か月', value: '16日' },
+      { label: '5年6か月', value: '18日' },
+      { label: '6年6か月〜', value: '20日' },
+    ],
+  },
+  {
+    key: 'remain',
+    label: '残数',
+    icon: 'bi-arrow-left-right',
+    tone: 'violet',
+    body: '今年度残／前年度残で表示します。新しい付与時、今年度の未使用分は前年度へ繰り越されます。',
+  },
+  {
+    key: 'expire',
+    label: '消滅',
+    icon: 'bi-hourglass-split',
+    tone: 'rose',
+    body: '付与日から2年経過すると、その残数は自動的にクリアされます。',
+  },
+];
+
 function PaidLeaveHelpModal({ open, onClose }) {
   if (!open) return null;
   return (
     <>
       <div
-        className="modal fade show d-block"
+        className="modal fade show d-block mypage-paid-leave-help-modal"
         tabIndex={-1}
         role="dialog"
         aria-modal="true"
         aria-labelledby="paidLeaveHelpModalTitle"
       >
         <div className="modal-dialog modal-dialog-centered modal-dialog-scrollable">
-          <div className="modal-content">
-            <div className="modal-header py-2">
-              <h2 className="modal-title fs-6" id="paidLeaveHelpModalTitle">
-                有給について
-              </h2>
+          <div className="modal-content mypage-paid-leave-help-content">
+            <div className="modal-header mypage-paid-leave-help-header border-0">
+              <div className="mypage-paid-leave-help-header-main">
+                <span className="mypage-paid-leave-help-header-icon" aria-hidden="true">
+                  <i className="bi bi-calendar-heart" />
+                </span>
+                <div>
+                  <h2 className="modal-title mypage-paid-leave-help-title" id="paidLeaveHelpModalTitle">
+                    有給について
+                  </h2>
+                  <p className="mypage-paid-leave-help-subtitle mb-0">付与・残数・消滅のルール概要</p>
+                </div>
+              </div>
               <button type="button" className="btn-close" aria-label="閉じる" onClick={onClose} />
             </div>
-            <div className="modal-body">
-              <dl className="mypage-paid-leave-help-list mb-0">
-                <div className="mypage-paid-leave-help-item">
-                  <dt>対象</dt>
-                  <dd>正社員</dd>
-                </div>
-                <div className="mypage-paid-leave-help-item">
-                  <dt>起算</dt>
-                  <dd>入社日。初回付与＝入社日＋6か月；以降は毎年同日</dd>
-                </div>
-                <div className="mypage-paid-leave-help-item">
-                  <dt>日数</dt>
-                  <dd>6か月10日 → … → 6年6か月以降は上限20日</dd>
-                </div>
-                <div className="mypage-paid-leave-help-item">
-                  <dt>残数</dt>
-                  <dd>今年度残／前年度残。新付与時、今年度の未使用分は前年度へ繰越し</dd>
-                </div>
-                <div className="mypage-paid-leave-help-item">
-                  <dt>消滅</dt>
-                  <dd>付与日から2年経過で自動クリア</dd>
-                </div>
-              </dl>
+            <div className="modal-body mypage-paid-leave-help-body">
+              <ul className="mypage-paid-leave-help-cards mb-0">
+                {PAID_LEAVE_HELP_ITEMS.map((item) => (
+                  <li key={item.key} className={`mypage-paid-leave-help-card tone-${item.tone}`}>
+                    <div className="mypage-paid-leave-help-card-icon" aria-hidden="true">
+                      <i className={`bi ${item.icon}`} />
+                    </div>
+                    <div className="mypage-paid-leave-help-card-body">
+                      <div className="mypage-paid-leave-help-card-label">{item.label}</div>
+                      <p className="mypage-paid-leave-help-card-text mb-0">{item.body}</p>
+                      {item.steps && (
+                        <ol className="mypage-paid-leave-help-steps mb-0">
+                          {item.steps.map((step) => (
+                            <li key={step}>{step}</li>
+                          ))}
+                        </ol>
+                      )}
+                      {item.chips && (
+                        <div className="mypage-paid-leave-help-chips" aria-label="付与日数の目安">
+                          {item.chips.map((chip, index) =>
+                            chip.value == null ? (
+                              <span key={`sep-${index}`} className="mypage-paid-leave-help-chip-sep" aria-hidden="true">
+                                …
+                              </span>
+                            ) : (
+                              <span key={chip.label} className="mypage-paid-leave-help-chip">
+                                <span className="mypage-paid-leave-help-chip-label">{chip.label}</span>
+                                <span className="mypage-paid-leave-help-chip-value">{chip.value}</span>
+                              </span>
+                            ),
+                          )}
+                        </div>
+                      )}
+                    </div>
+                  </li>
+                ))}
+              </ul>
             </div>
-            <div className="modal-footer py-2">
+            <div className="modal-footer mypage-paid-leave-help-footer border-0">
               <button type="button" className="btn btn-primary app-btn" onClick={onClose}>
                 閉じる
               </button>
