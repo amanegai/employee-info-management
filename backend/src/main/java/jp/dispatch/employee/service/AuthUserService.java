@@ -30,6 +30,7 @@ public class AuthUserService {
     private static final List<String> ASSIGNABLE_ROLES = List.of(
             AuthRoles.ADMIN,
             AuthRoles.HR,
+            AuthRoles.EMPLOYEE,
             AuthRoles.DIVISION_HEAD,
             AuthRoles.DEPT_HEAD,
             AuthRoles.SALES_HEAD
@@ -71,6 +72,7 @@ public class AuthUserService {
         }
         List<String> roles = normalizeRoles(request.roles());
         validateDepartmentForRoles(roles, request.departmentId());
+        Long employeeId = normalizeEmployeeId(request.employeeId(), null);
         String email = normalizeEmail(request.email());
         authUserRepository.createUser(
                 username,
@@ -78,6 +80,7 @@ public class AuthUserService {
                 normalizeDisplayName(request.displayName(), username),
                 email,
                 request.departmentId(),
+                employeeId,
                 roles
         );
         AuthUserListItemDto created = authUserRepository.findAllUsers().stream()
@@ -98,12 +101,14 @@ public class AuthUserService {
         validateDepartmentForRoles(roles, request.departmentId());
         boolean enabled = request.enabled() == null || request.enabled();
         ensureAdminPreserved(existing, roles, enabled);
+        Long employeeId = normalizeEmployeeId(request.employeeId(), id);
 
         authUserRepository.updateUser(
                 id,
                 normalizeDisplayName(request.displayName(), existing.username()),
                 normalizeEmail(request.email()),
                 request.departmentId(),
+                employeeId,
                 enabled
         );
         if (request.password() != null && !request.password().isBlank()) {
@@ -153,9 +158,25 @@ public class AuthUserService {
                 roles,
                 user.departmentId(),
                 user.departmentName(),
+                user.employeeId(),
+                user.employeeCode(),
+                user.employeeName(),
                 user.enabled(),
                 user.totpEnabled()
         );
+    }
+
+    private Long normalizeEmployeeId(Long employeeId, Long excludeUserId) {
+        if (employeeId == null || employeeId <= 0) {
+            return null;
+        }
+        if (employeeRepository.findById(employeeId).isEmpty()) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "連携する社員が見つかりません");
+        }
+        if (authUserRepository.isEmployeeLinkedToOtherUser(employeeId, excludeUserId)) {
+            throw new ResponseStatusException(HttpStatus.CONFLICT, "この社員は既に別ユーザーに連携されています");
+        }
+        return employeeId;
     }
 
     private void requireManagePermission() {

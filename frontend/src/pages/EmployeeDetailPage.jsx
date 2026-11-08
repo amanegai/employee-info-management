@@ -9,6 +9,7 @@ import AttendanceTab from '../components/detail/tabs/AttendanceTab';
 import EvaluationTab from '../components/detail/tabs/EvaluationTab';
 import ProjectsTab from '../components/detail/tabs/ProjectsTab';
 import SalaryTab from '../components/detail/tabs/SalaryTab';
+import AlignedJapaneseName from '../components/AlignedJapaneseName';
 import AppFooter from '../components/AppFooter';
 import EmployeeResumeModal from '../components/detail/EmployeeResumeModal';
 import EmployeeAppealModal from '../components/detail/EmployeeAppealModal';
@@ -24,7 +25,7 @@ export default function EmployeeDetailPage() {
   const { id } = useParams();
   const navigate = useNavigate();
   const location = useLocation();
-  const backPath = location.state?.from || '/';
+  const backPath = location.state?.from || '/employees';
   const backLabel = location.state?.fromLabel || '一覧に戻る';
   const matchState = location.state?.matchState;
 
@@ -33,8 +34,8 @@ export default function EmployeeDetailPage() {
       navigate('/project-match', { state: { matchState } });
       return;
     }
-    if (backPath === '/' && location.state?.fromImport) {
-      navigate('/', { state: { refreshList: true } });
+    if (location.state?.fromImport) {
+      navigate('/employees', { state: { refreshList: true } });
       return;
     }
     navigate(backPath);
@@ -204,10 +205,14 @@ export default function EmployeeDetailPage() {
               <h1 className="h3 mb-0">社員情報詳細</h1>
               <PageGuideHelpButton guideId="employee-detail" />
             </div>
-            <p className="text-muted mb-0 small">
-              {employee.name}
-              {employee.personal?.furigana ? `（${employee.personal.furigana}）` : ''}
-            </p>
+            <div className="page-header-employee-identity">
+              <AlignedJapaneseName
+                name={employee.name}
+                kana={employee.personal?.furigana}
+                nameClassName="page-header-employee-name"
+                kanaClassName="page-header-employee-kana"
+              />
+            </div>
           </div>
         </div>
       </header>

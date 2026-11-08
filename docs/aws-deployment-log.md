@@ -5,7 +5,7 @@
 | 作成日 | 2026-07-13 |
 | 文档位置 | `employee-info-management/docs/aws-deployment-log.md` |
 | 状态 | EC2 + Docker Compose 已上线，登录页可访问 |
-| 相关文档 | [aws-what-you-should-do.md](aws-what-you-should-do.md)、[deploy-linux.md](deploy-linux.md)、[aws-deployment-checklist.md](aws-deployment-checklist.md) |
+| 相关文档 | [aws-what-you-should-do.md](aws-what-you-should-do.md)、[deploy-linux.md](deploy-linux.md)、[aws-deployment-checklist.md](aws-deployment-checklist.md)、**[aws-redeploy.md](aws-redeploy.md)（再发布・启停命令速查）** |
 
 本文记录 **从决定上 AWS 到首次打开登录页** 的实际过程、踩坑与日常运维约定，便于本人与同事回顾。
 
@@ -178,6 +178,8 @@ docker compose exec -T postgres psql -U employee_app -d employee_mgmt < scripts/
 ```
 
 ### 服务器更新命令
+
+> 命令速查已单独整理：[aws-redeploy.md](aws-redeploy.md)
 
 ```bash
 cd /opt/employee-mgmt/employee-info-management

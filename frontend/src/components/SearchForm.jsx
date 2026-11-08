@@ -2,10 +2,12 @@ import { useMemo } from 'react';
 import { TECHNICAL_SKILL_TEMPLATE } from '../constants/technicalSkillTemplate';
 import SearchFieldLabel from './SearchFieldLabel';
 import { TECHNICAL_SKILL_MARK_OPTIONS } from '../utils';
+import { AFFILIATION_COMPANIES, departmentOptionLabel } from '../utils/employeeCode';
 
 export default function SearchForm({
   filters,
   departments,
+  affiliationCompanies = AFFILIATION_COMPANIES,
   employeeTypes = [],
   workStatuses = [],
   scopeRestricted = false,
@@ -54,17 +56,35 @@ export default function SearchForm({
           <div className="search-form-grid">
             <div className="search-form-field">
               <SearchFieldLabel htmlFor="searchKeyword" icon="bi-person">
-                社員名
+                社員名 / 社員ID
               </SearchFieldLabel>
               <input
                 id="searchKeyword"
                 type="search"
                 className="form-control form-control-sm"
-                placeholder="例: 山田"
+                placeholder="例: 山田 / btcS00001"
                 value={filters.keyword}
                 onChange={(e) => updateFilters({ keyword: e.target.value })}
                 autoComplete="off"
               />
+            </div>
+            <div className="search-form-field">
+              <SearchFieldLabel htmlFor="searchCompany" icon="bi-building">
+                所属会社
+              </SearchFieldLabel>
+              <select
+                id="searchCompany"
+                className="form-select form-select-sm"
+                value={filters.affiliationCompany}
+                onChange={(e) => updateFilters({ affiliationCompany: e.target.value })}
+              >
+                <option value="">すべて</option>
+                {affiliationCompanies.map((c) => (
+                  <option key={c} value={c}>
+                    {c}
+                  </option>
+                ))}
+              </select>
             </div>
             <div className="search-form-field">
               <SearchFieldLabel htmlFor="searchDept" icon="bi-diagram-3">
@@ -79,7 +99,7 @@ export default function SearchForm({
                 <option value="">{scopeRestricted ? '管轄内すべて' : 'すべて'}</option>
                 {departments.map((d) => (
                   <option key={d.id} value={d.id}>
-                    {d.name}
+                    {departmentOptionLabel(d)}
                   </option>
                 ))}
               </select>

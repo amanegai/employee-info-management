@@ -9,14 +9,18 @@ import jp.dispatch.employee.dto.BpHelpReferralReviewRequest;
 import jp.dispatch.employee.dto.BpHelpReferralStageRequest;
 import jp.dispatch.employee.dto.DispatchProjectDto;
 import jp.dispatch.employee.dto.EmployeeDto;
+import jp.dispatch.employee.dto.EmployeeDetailDto.PersonalDto;
 import jp.dispatch.employee.dto.EmployeeSaveRequest;
 import jp.dispatch.employee.dto.FileAttachmentDto;
 import jp.dispatch.employee.model.BpHelpReferralStatuses;
+import jp.dispatch.employee.model.EmployeeCodeRules;
 import jp.dispatch.employee.model.NotificationTypes;
+import jp.dispatch.employee.model.AffiliationCompanies;
 import jp.dispatch.employee.repository.AppNotificationRepository;
 import jp.dispatch.employee.repository.BpHelpReferralRepository;
 import jp.dispatch.employee.repository.DispatchProjectRepository;
 import jp.dispatch.employee.repository.EmployeeProjectAssignmentRepository;
+import jp.dispatch.employee.repository.EmployeeRepository;
 import jp.dispatch.employee.repository.FileAttachmentRepository;
 import jp.dispatch.employee.repository.ProjectCandidateRepository;
 import org.springframework.http.HttpStatus;
@@ -39,7 +43,6 @@ public class BpHelpReferralService {
 
     private static final DateTimeFormatter TIMESTAMP = DateTimeFormatter.ofPattern("yyyy-MM-dd'T'HH:mm:ss");
     private static final ZoneId ZONE = ZoneId.of("Asia/Tokyo");
-    private static final long DEFAULT_BP_DEPARTMENT_ID = 9L; // 営業部
     private static final Map<String, Set<String>> STAGE_TRANSITIONS = Map.of(
             BpHelpReferralStatuses.SUBMITTED, Set.of(BpHelpReferralStatuses.INTERVIEW_SCHEDULED),
             BpHelpReferralStatuses.INTERVIEW_SCHEDULED, Set.of(
@@ -63,6 +66,7 @@ public class BpHelpReferralService {
     private final FileAttachmentService fileAttachmentService;
     private final FileAttachmentRepository fileAttachmentRepository;
     private final EmployeeService employeeService;
+    private final EmployeeRepository employeeRepository;
     private final ProjectCandidateRepository candidateRepository;
     private final EmployeeProjectAssignmentRepository assignmentRepository;
     private final BpHelpNotificationService bpHelpNotificationService;
@@ -75,6 +79,7 @@ public class BpHelpReferralService {
             FileAttachmentService fileAttachmentService,
             FileAttachmentRepository fileAttachmentRepository,
             EmployeeService employeeService,
+            EmployeeRepository employeeRepository,
             ProjectCandidateRepository candidateRepository,
             EmployeeProjectAssignmentRepository assignmentRepository,
             BpHelpNotificationService bpHelpNotificationService,
@@ -86,6 +91,7 @@ public class BpHelpReferralService {
         this.fileAttachmentService = fileAttachmentService;
         this.fileAttachmentRepository = fileAttachmentRepository;
         this.employeeService = employeeService;
+        this.employeeRepository = employeeRepository;
         this.candidateRepository = candidateRepository;
         this.assignmentRepository = assignmentRepository;
         this.bpHelpNotificationService = bpHelpNotificationService;
@@ -361,31 +367,74 @@ public class BpHelpReferralService {
 
         AppUserDetails user = requireCurrentUser();
         String now = timestampNow();
-        long departmentId = request.departmentId() != null && request.departmentId() > 0
-                ? request.departmentId()
-                : DEFAULT_BP_DEPARTMENT_ID;
+        String employeeCode = requireTrimmed(request.employeeCode(), "社員IDは必須です");
+        if (request.departmentId() == null || request.departmentId() <= 0) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "所属部門は必須です");
+        }
+
+        PersonalDto personal = new PersonalDto(
+                blankToNull(request.gender()),
+                blankToNull(request.birthDate()),
+                null,
+                null,
+                null,
+                null,
+                null,
+                null,
+                null,
+                null,
+                null,
+                null,
+                null,
+                null,
+                null,
+                null,
+                null,
+                null,
+                null,
+                blankToNull(request.japanArrivalDate()),
+                null,
+                null,
+                null,
+                null,
+                null,
+                null,
+                null,
+                null,
+                null,
+                null,
+                null,
+                null,
+                null,
+                null,
+                null
+        );
 
         String memo = buildHireMemo(referral);
+        String affiliationCompany = employeeRepository.findDepartmentCompanyById(request.departmentId())
+                .map(AffiliationCompanies::normalize)
+                .orElse(AffiliationCompanies.BITCROSS);
         EmployeeSaveRequest employeeRequest = new EmployeeSaveRequest(
-                null,
+                employeeCode,
                 referral.candidateName(),
-                departmentId,
+                request.departmentId(),
+                affiliationCompany,
                 null,
                 null,
-                "BP",
+                EmployeeCodeRules.TYPE_BP,
                 "稼働中",
                 0,
                 null,
                 endDate,
-                null,
-                null,
-                null,
-                null,
-                null,
+                personal,
+                List.of(),
+                List.of(),
+                List.of(),
+                List.of(),
                 null,
                 null,
                 memo,
-                null,
+                List.of(),
                 null,
                 null,
                 null

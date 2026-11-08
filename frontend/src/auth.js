@@ -33,9 +33,25 @@ export function canWrite(user) {
   );
 }
 
-/** 案件・配属の閲覧（人事は対象外） */
+/** 業務系ロール（一般社員のみのアカウントを除く） */
+export function hasOperationalRole(user) {
+  return (
+    hasRole(user, 'ADMIN') ||
+    hasRole(user, 'HR') ||
+    hasRole(user, 'DIVISION_HEAD') ||
+    hasRole(user, 'DEPT_HEAD') ||
+    hasRole(user, 'SALES_HEAD')
+  );
+}
+
+/** 社員一覧・詳細の閲覧（業務ロール） */
+export function canViewEmployeeDirectory(user) {
+  return hasOperationalRole(user);
+}
+
+/** 案件・配属の閲覧（人事・一般社員は対象外） */
 export function canViewProjectFeatures(user) {
-  return Boolean(user) && !hasRole(user, 'HR');
+  return hasOperationalRole(user) && !hasRole(user, 'HR');
 }
 
 /** 案件・配属・候補者の編集（人事は対象外） */
@@ -48,9 +64,9 @@ export function canWriteProjectFeatures(user) {
   );
 }
 
-/** ファイル管理の閲覧（全ログインユーザー） */
+/** ファイル管理の閲覧（業務ロール） */
 export function canViewFiles(user) {
-  return Boolean(user);
+  return hasOperationalRole(user);
 }
 
 /** ファイル管理の操作（アップロード・削除） */
@@ -70,6 +86,35 @@ export function canDelete(user) {
 
 export function canManageUsers(user) {
   return hasRole(user, 'ADMIN');
+}
+
+/** マスタ一括登録（管理者のみ） */
+export function canManageMasterData(user) {
+  return hasRole(user, 'ADMIN');
+}
+
+/** 所属部門・役職・役割の変更（管理者・人事） */
+export function canChangeEmployeeDepartmentAndRole(user) {
+  return hasRole(user, 'ADMIN') || hasRole(user, 'HR');
+}
+
+/** 退社日の編集、および退職予定/退職ステータスの操作（管理者・人事） */
+export function canEditResignationDate(user) {
+  return hasRole(user, 'ADMIN') || hasRole(user, 'HR');
+}
+
+export const RESIGNATION_WORK_STATUSES = ['退職予定', '退職'];
+
+/** 稼働状況の選択肢（非人事は退職系を除外） */
+export function workStatusOptionsForUser(user, allStatuses = []) {
+  if (canEditResignationDate(user)) return allStatuses;
+  return (allStatuses ?? []).filter((s) => !RESIGNATION_WORK_STATUSES.includes(s));
+}
+
+/** 既に退職予定/退職の場合、非人事は稼働状況を変更不可 */
+export function canEditWorkStatus(user, currentWorkStatus) {
+  if (canEditResignationDate(user)) return true;
+  return !RESIGNATION_WORK_STATUSES.includes(currentWorkStatus);
 }
 
 /** BP求援の開始・更新・終了（案件作成者／自社担当／管理者） */
@@ -117,14 +162,14 @@ export function canManageHrOps(user) {
   return hasRole(user, 'ADMIN') || hasRole(user, 'HR');
 }
 
-/** 会議室予約の閲覧（全ログインユーザー） */
+/** 会議室予約の閲覧（業務ロール） */
 export function canViewMeetingRooms(user) {
-  return Boolean(user);
+  return hasOperationalRole(user);
 }
 
-/** 会議室予約の作成・変更（全ログインユーザー） */
+/** 会議室予約の作成・変更（業務ロール） */
 export function canWriteMeetingRoomReservations(user) {
-  return Boolean(user);
+  return hasOperationalRole(user);
 }
 
 /** 会議室マスタの管理（管理者のみ） */
@@ -141,6 +186,7 @@ export function canModifyMeetingRoomReservation(user, reservation) {
 export const USER_ROLE_OPTIONS = [
   { value: 'ADMIN', label: '管理者' },
   { value: 'HR', label: '人事' },
+  { value: 'EMPLOYEE', label: '一般社員' },
   { value: 'DIVISION_HEAD', label: '事業部長' },
   { value: 'DEPT_HEAD', label: '部長' },
   { value: 'SALES_HEAD', label: '営業' },
@@ -207,6 +253,8 @@ export function roleLabel(role) {
       return '管理者';
     case 'HR':
       return '人事';
+    case 'EMPLOYEE':
+      return '一般社員';
     case 'USER':
       return '一般';
     case 'DIVISION_HEAD':
@@ -226,6 +274,8 @@ export function roleIcon(role) {
       return 'bi-shield-lock-fill';
     case 'HR':
       return 'bi-person-vcard-fill';
+    case 'EMPLOYEE':
+      return 'bi-person-badge';
     case 'USER':
       return 'bi-person-fill';
     case 'DIVISION_HEAD':
@@ -245,6 +295,8 @@ export function roleBadgeClass(role) {
       return 'user-mgmt-role-admin';
     case 'HR':
       return 'user-mgmt-role-hr';
+    case 'EMPLOYEE':
+      return 'user-mgmt-role-employee';
     case 'USER':
       return 'user-mgmt-role-user';
     case 'DIVISION_HEAD':

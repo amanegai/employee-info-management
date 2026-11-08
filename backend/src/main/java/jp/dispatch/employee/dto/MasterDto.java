@@ -5,6 +5,7 @@ import java.util.List;
 public record MasterDto(
         List<DepartmentDto> departments,
         List<DepartmentDto> assignableDepartments,
+        List<String> affiliationCompanies,
         List<String> positions,
         List<String> assignmentRoles,
         List<String> employeeTypes,

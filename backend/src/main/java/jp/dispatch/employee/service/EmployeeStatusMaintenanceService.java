@@ -43,6 +43,7 @@ public class EmployeeStatusMaintenanceService {
     private final EmployeeStatusSuggestionRepository suggestionRepository;
     private final SecurityService securityService;
     private final AuditLogService auditLogService;
+    private final PaidLeaveBalanceService paidLeaveBalanceService;
 
     @Value("${app.employee-status.maintenance.enabled:true}")
     private boolean maintenanceEnabled;
@@ -59,7 +60,8 @@ public class EmployeeStatusMaintenanceService {
             EmployeeStatusChangeLogRepository statusLogRepository,
             EmployeeStatusSuggestionRepository suggestionRepository,
             SecurityService securityService,
-            AuditLogService auditLogService
+            AuditLogService auditLogService,
+            PaidLeaveBalanceService paidLeaveBalanceService
     ) {
         this.assignmentRepository = assignmentRepository;
         this.employeeRepository = employeeRepository;
@@ -67,6 +69,7 @@ public class EmployeeStatusMaintenanceService {
         this.suggestionRepository = suggestionRepository;
         this.securityService = securityService;
         this.auditLogService = auditLogService;
+        this.paidLeaveBalanceService = paidLeaveBalanceService;
     }
 
     @EventListener(ApplicationReadyEvent.class)
@@ -189,6 +192,33 @@ public class EmployeeStatusMaintenanceService {
             );
         }
 
+        for (var employee : employeeRepository.findAllWithResignationDate()) {
+            String resignationDate = employee.resignationDate();
+            if (resignationDate == null || resignationDate.isBlank()) {
+                continue;
+            }
+            String targetStatus = resignationDate.compareTo(today) <= 0 ? "退職" : "退職予定";
+            if (targetStatus.equals(employee.workStatus())) {
+                continue;
+            }
+            statusLogRepository.insert(
+                    employee.id(),
+                    employee.workStatus(),
+                    targetStatus,
+                    employee.endDate(),
+                    employee.endDate(),
+                    "RESIGNATION_DATE",
+                    null,
+                    "退社日（" + resignationDate + "）に基づき稼働状況を「" + targetStatus + "」へ更新しました。",
+                    null
+            );
+            employeeRepository.updateWorkStatusAndEndDate(employee.id(), targetStatus, employee.endDate());
+            if (PaidLeaveBalanceService.isResignedWorkStatus(targetStatus)) {
+                paidLeaveBalanceService.clearBalanceOnResignation(employee.id());
+            }
+            counters.statusChangesApplied++;
+        }
+
         if (counters.suggestionsCreated > 0 || counters.statusChangesApplied > 0 || counters.assignmentsUpdated > 0) {
             log.info(
                     "[{}] 社員状態メンテナンス suggestions={} applied={} assignments={}",
@@ -229,6 +259,9 @@ public class EmployeeStatusMaintenanceService {
                 suggestion.suggestedStatus(),
                 suggestion.suggestedEndDate()
         );
+        if (PaidLeaveBalanceService.isResignedWorkStatus(suggestion.suggestedStatus())) {
+            paidLeaveBalanceService.clearBalanceOnResignation(suggestion.employeeId());
+        }
         statusLogRepository.insert(
                 suggestion.employeeId(),
                 suggestion.currentWorkStatus(),
@@ -316,6 +349,9 @@ public class EmployeeStatusMaintenanceService {
                     appliedBy
             );
             employeeRepository.updateWorkStatusAndEndDate(employee.id(), newStatus, newEndDate);
+            if (PaidLeaveBalanceService.isResignedWorkStatus(newStatus)) {
+                paidLeaveBalanceService.clearBalanceOnResignation(employee.id());
+            }
             counters.statusChangesApplied++;
         } else if (!suggestionRepository.hasPendingDuplicate(employee.id(), newStatus, reason)) {
             suggestionRepository.insertPending(

@@ -39,6 +39,7 @@
 | AUTH-02 | アカウントセキュリティ | `/account/security` | `AccountSecurityPage.jsx` | ログイン済み（自己 MFA 設定） |
 | AUTH-03 | ユーザー管理 | `/users` | `UserManagementPage.jsx` | `AdminProtectedRoute` |
 | AUTH-04 | 監査ログ | `/admin/audit-logs` | `AuditLogPage.jsx` | `AdminProtectedRoute` |
+| AUTH-05 | マスタ一括登録 | `/admin/master-import` | `MasterImportPage.jsx` | `AdminProtectedRoute`。社員（基本情報＋保有資格・関連技術・職務経歴）・取引先の Excel 一括登録。dryRun プレビュー後に本登録 |
 
 ---
 
@@ -49,7 +50,7 @@
 | EMP-01 | 社員一覧 | `/` | `EmployeeListPage.jsx` | `ProtectedRoute`。トップ＝一覧 |
 | EMP-02 | 社員詳細 | `/employees/:id` | `EmployeeDetailPage.jsx` | ログイン済み。複数タブ構成（`DETAIL_TABS`） |
 | EMP-03 | 社員登録 | `/employees/new` | `EmployeeFormPage.jsx`（create） | `WriteProtectedRoute` |
-| EMP-04 | 社員編集 | `/employees/:id/edit` | `EmployeeFormPage.jsx`（edit） | `WriteProtectedRoute` |
+| EMP-04 | 社員編集 | `/employees/:id/edit` | `EmployeeFormPage.jsx`（edit） | `WriteProtectedRoute`。所属部門・役職・役割は ADMIN/HR のみ編集可（`canChangeEmployeeDepartmentAndRole`） |
 
 **詳細の主なタブ（同一ルート EMP-02、順）：** 基本情報 / 案件・配属 / スキル・資格・経歴 / 勤怠・評価・メモ / 総合評価 / 給与・人事（`frontend/src/components/detail/`、`DETAIL_TABS`）。
 
@@ -220,6 +221,8 @@
 ルート定義の正：`frontend/src/App.jsx`。
 
 ---
+
+*バージョン 1.4（2026-08-12）：マスタ一括登録の多シート取込、社員編集時の役職権限制限を反映。*
 
 *バージョン 1.3（2026-08-06）：BP求援一覧（PRJ-06）と通知ベルを追加。*
 

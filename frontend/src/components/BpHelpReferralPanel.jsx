@@ -1,13 +1,21 @@
 import { Link } from 'react-router-dom';
-import { useCallback, useEffect, useRef, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { api } from '../api';
 import { canReviewBpReferral, canWriteProjectFeatures } from '../auth';
 import { useAuth } from '../context/AuthContext';
 import { useAppMessage } from '../context/MessageContext';
 import { excludeParentDepartments } from '../utils';
+import {
+  AFFILIATION_COMPANY_BITCROSS,
+  DEPT_SONOTA,
+  departmentOptionLabel,
+  filterDepartmentsForEmployeeType,
+  formatRecommendHint,
+  normalizeAffiliationCompany,
+  validateEmployeeCode,
+} from '../utils/employeeCode';
 import BpHelpReferralProgress, { bpReferralStatusLabel } from './BpHelpReferralProgress';
 
-const DEFAULT_BP_DEPARTMENT_ID = 9; // 営業部
 const RESUME_PURGED_STATUSES = new Set(['REJECTED', 'CLIENT_REJECTED', 'DECLINED', 'WITHDRAWN']);
 
 function isResumePurged(status) {
@@ -31,14 +39,37 @@ function emptyForm() {
   return { candidateName: '', bpCompanyName: '', note: '', resume: null };
 }
 
+function bpDepartmentsAll(departments = []) {
+  const companies = [
+    ...new Set(departments.map((d) => normalizeAffiliationCompany(d.company))),
+  ];
+  return companies.flatMap((company) =>
+    filterDepartmentsForEmployeeType(departments, 'BP', company)
+  );
+}
+
 function emptyHireForm(project, departments = []) {
-  const hasDefault = departments.some((d) => Number(d.id) === DEFAULT_BP_DEPARTMENT_ID);
+  const options = bpDepartmentsAll(departments);
+  const sonota = options.find(
+    (d) =>
+      d.name === DEPT_SONOTA &&
+      normalizeAffiliationCompany(d.company) === AFFILIATION_COMPANY_BITCROSS
+  );
+  const departmentId = sonota
+    ? String(sonota.id)
+    : options[0]
+      ? String(options[0].id)
+      : '';
+  const selected = options.find((d) => String(d.id) === departmentId);
   return {
-    departmentId: hasDefault
-      ? String(DEFAULT_BP_DEPARTMENT_ID)
-      : departments[0]
-        ? String(departments[0].id)
-        : '',
+    affiliationCompany: selected
+      ? normalizeAffiliationCompany(selected.company)
+      : AFFILIATION_COMPANY_BITCROSS,
+    departmentId,
+    employeeCode: '',
+    gender: '',
+    birthDate: '',
+    japanArrivalDate: '',
     startDate: project?.expectedStartDate || '',
     endDate: project?.expectedEndDate || '',
     notes: '',
@@ -59,6 +90,9 @@ export default function BpHelpReferralPanel({ project, enabled, onProjectChanged
   const [form, setForm] = useState(emptyForm);
   const [hireTarget, setHireTarget] = useState(null);
   const [hireForm, setHireForm] = useState(() => emptyHireForm(project));
+  const [hireCodeHint, setHireCodeHint] = useState('');
+
+  const bpDepartments = useMemo(() => bpDepartmentsAll(departments), [departments]);
 
   const loadReferrals = useCallback(async () => {
     if (!project?.id) return;
@@ -204,23 +238,55 @@ export default function BpHelpReferralPanel({ project, enabled, onProjectChanged
   }
 
   function openHire(referral) {
+    const next = emptyHireForm(project, departments);
     setHireTarget(referral);
-    setHireForm(emptyHireForm(project, departments));
+    setHireForm(next);
+    void refreshHireCodeHint(next.departmentId, next.affiliationCompany);
   }
 
   function cancelHire() {
     setHireTarget(null);
+    setHireCodeHint('');
+  }
+
+  async function refreshHireCodeHint(departmentId, affiliationCompany) {
+    if (!departmentId) {
+      setHireCodeHint('');
+      return;
+    }
+    const company =
+      affiliationCompany ||
+      normalizeAffiliationCompany(
+        bpDepartments.find((d) => String(d.id) === String(departmentId))?.company
+      );
+    try {
+      const recommend = await api.recommendEmployeeCode('BP', Number(departmentId), company);
+      setHireCodeHint(formatRecommendHint(recommend));
+    } catch {
+      setHireCodeHint('');
+    }
   }
 
   async function handleHireSubmit(e) {
     e.preventDefault();
     if (!hireTarget) return;
+    if (!hireForm.employeeCode.trim()) {
+      showMessage('社員IDは必須です', 'danger');
+      return;
+    }
     if (!hireForm.startDate.trim()) {
       showMessage('配属開始日は必須です', 'danger');
       return;
     }
     if (!hireForm.departmentId) {
       showMessage('所属部門を選択してください', 'danger');
+      return;
+    }
+    const dept = bpDepartments.find((d) => String(d.id) === String(hireForm.departmentId));
+    const company = normalizeAffiliationCompany(dept?.company || hireForm.affiliationCompany);
+    const codeError = validateEmployeeCode(hireForm.employeeCode, 'BP', dept?.name, company);
+    if (codeError) {
+      showMessage(codeError, 'danger');
       return;
     }
     if (!window.confirm(
@@ -234,13 +300,17 @@ export default function BpHelpReferralPanel({ project, enabled, onProjectChanged
         endDate: hireForm.endDate.trim() || null,
         notes: hireForm.notes.trim() || null,
         departmentId: Number(hireForm.departmentId),
+        employeeCode: hireForm.employeeCode.trim(),
+        gender: hireForm.gender.trim() || null,
+        birthDate: hireForm.birthDate.trim() || null,
+        japanArrivalDate: hireForm.japanArrivalDate.trim() || null,
       });
       showMessage(
         `採用確定しました（社員番号: ${result.hiredEmployeeCode || '—'}）。詳細は社員画面で補完できます。`
       );
       setHireTarget(null);
+      setHireCodeHint('');
       await loadReferrals();
-      // 採用で社員・配属・案件人数／ステータスが変わるため、親の案件詳細も再取得する
       if (onProjectChanged) {
         await onProjectChanged();
       }
@@ -476,22 +546,80 @@ export default function BpHelpReferralPanel({ project, enabled, onProjectChanged
                       </div>
                       <div className="row g-2">
                         <div className="col-12">
+                          <label className="form-label small mb-1" htmlFor={`bp-hire-code-${referral.id}`}>
+                            社員ID
+                          </label>
+                          <input
+                            id={`bp-hire-code-${referral.id}`}
+                            className="form-control form-control-sm"
+                            value={hireForm.employeeCode}
+                            onChange={(e) => setHireForm((prev) => ({ ...prev, employeeCode: e.target.value.trim() }))}
+                            placeholder="例：btcB00001"
+                            required
+                            disabled={saving}
+                          />
+                          {hireCodeHint && <p className="small text-muted mb-0 mt-1">{hireCodeHint}</p>}
+                        </div>
+                        <div className="col-12">
                           <label className="form-label small mb-1" htmlFor={`bp-hire-dept-${referral.id}`}>
-                            所属部門
+                            所属部門（会社別）
                           </label>
                           <select
                             id={`bp-hire-dept-${referral.id}`}
                             className="form-select form-select-sm"
                             value={hireForm.departmentId}
-                            onChange={(e) => setHireForm((prev) => ({ ...prev, departmentId: e.target.value }))}
+                            onChange={(e) => {
+                              const departmentId = e.target.value;
+                              const selected = bpDepartments.find((d) => String(d.id) === departmentId);
+                              const affiliationCompany = normalizeAffiliationCompany(selected?.company);
+                              setHireForm((prev) => ({ ...prev, departmentId, affiliationCompany }));
+                              void refreshHireCodeHint(departmentId, affiliationCompany);
+                            }}
                             required
                             disabled={saving}
                           >
                             <option value="">選択してください</option>
-                            {departments.map((d) => (
-                              <option key={d.id} value={d.id}>{d.name}</option>
+                            {bpDepartments.map((d) => (
+                              <option key={d.id} value={d.id}>{departmentOptionLabel(d)}</option>
                             ))}
                           </select>
+                        </div>
+                        <div className="col-4">
+                          <label className="form-label small mb-1" htmlFor={`bp-hire-gender-${referral.id}`}>性別</label>
+                          <select
+                            id={`bp-hire-gender-${referral.id}`}
+                            className="form-select form-select-sm"
+                            value={hireForm.gender}
+                            onChange={(e) => setHireForm((prev) => ({ ...prev, gender: e.target.value }))}
+                            disabled={saving}
+                          >
+                            <option value="">未設定</option>
+                            <option value="男性">男性</option>
+                            <option value="女性">女性</option>
+                            <option value="その他">その他</option>
+                          </select>
+                        </div>
+                        <div className="col-4">
+                          <label className="form-label small mb-1" htmlFor={`bp-hire-birth-${referral.id}`}>生年月日</label>
+                          <input
+                            id={`bp-hire-birth-${referral.id}`}
+                            type="date"
+                            className="form-control form-control-sm"
+                            value={hireForm.birthDate}
+                            onChange={(e) => setHireForm((prev) => ({ ...prev, birthDate: e.target.value }))}
+                            disabled={saving}
+                          />
+                        </div>
+                        <div className="col-4">
+                          <label className="form-label small mb-1" htmlFor={`bp-hire-arrival-${referral.id}`}>来日年月</label>
+                          <input
+                            id={`bp-hire-arrival-${referral.id}`}
+                            type="date"
+                            className="form-control form-control-sm"
+                            value={hireForm.japanArrivalDate}
+                            onChange={(e) => setHireForm((prev) => ({ ...prev, japanArrivalDate: e.target.value }))}
+                            disabled={saving}
+                          />
                         </div>
                         <div className="col-6">
                           <label className="form-label small mb-1" htmlFor={`bp-hire-start-${referral.id}`}>
@@ -535,7 +663,7 @@ export default function BpHelpReferralPanel({ project, enabled, onProjectChanged
                         </div>
                       </div>
                       <p className="bp-referral-hire-hint mb-0">
-                        氏名・BP会社・履歴書は臨時候補の情報を引き継ぎます。詳細（連絡先・スキル等）は採用後に社員画面で補完してください。
+                        社員IDは手動入力です。姓名・性別・生年月日・来日年月が一致する社員がいる場合は登録できません。
                       </p>
                       <div className="bp-referral-hire-actions">
                         <button type="submit" className="btn btn-success btn-sm app-btn" disabled={saving}>

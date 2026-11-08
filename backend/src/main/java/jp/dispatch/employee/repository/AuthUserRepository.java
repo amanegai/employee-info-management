@@ -33,7 +33,7 @@ public class AuthUserRepository {
     public Optional<AppUserDetails> findByUsername(String username) {
         var users = jdbc.query(
                 """
-                SELECT id, username, password_hash, display_name, department_id, enabled
+                SELECT id, username, password_hash, display_name, department_id, employee_id, enabled
                 FROM auth_user
                 WHERE username = ?
                 """,
@@ -43,6 +43,7 @@ public class AuthUserRepository {
                         rs.getString("password_hash"),
                         rs.getString("display_name"),
                         readNullableLong(rs, "department_id"),
+                        readNullableLong(rs, "employee_id"),
                         rs.getInt("enabled") == 1,
                         List.of()
                 ),
@@ -59,6 +60,7 @@ public class AuthUserRepository {
                 user.getPassword(),
                 user.getDisplayName(),
                 user.getDepartmentId(),
+                user.getEmployeeId(),
                 user.isEnabled(),
                 roles
         ));
@@ -72,16 +74,29 @@ public class AuthUserRepository {
             Long departmentId,
             List<String> roles
     ) {
+        createUser(username, passwordHash, displayName, email, departmentId, null, roles);
+    }
+
+    public void createUser(
+            String username,
+            String passwordHash,
+            String displayName,
+            String email,
+            Long departmentId,
+            Long employeeId,
+            List<String> roles
+    ) {
         jdbc.update(
                 """
-                INSERT INTO auth_user (username, password_hash, display_name, email, department_id, enabled)
-                VALUES (?, ?, ?, ?, ?, 1)
+                INSERT INTO auth_user (username, password_hash, display_name, email, department_id, employee_id, enabled)
+                VALUES (?, ?, ?, ?, ?, ?, 1)
                 """,
                 username,
                 passwordHash,
                 displayName,
                 email,
-                departmentId
+                departmentId,
+                employeeId
         );
         Long userId = jdbc.queryForObject(
                 "SELECT id FROM auth_user WHERE username = ?",
@@ -112,47 +127,49 @@ public class AuthUserRepository {
     public List<AuthUserRecord> findAllUsers() {
         return jdbc.query(
                 """
-                SELECT u.id, u.username, u.display_name, u.email, u.department_id, d.name AS department_name, u.enabled,
+                SELECT u.id, u.username, u.display_name, u.email, u.department_id, d.name AS department_name,
+                       u.employee_id, e.employee_code, e.name AS employee_name, u.enabled,
                        COALESCE(u.totp_enabled, 0) AS totp_enabled
                 FROM auth_user u
                 LEFT JOIN department d ON d.id = u.department_id
+                LEFT JOIN employee e ON e.id = u.employee_id
                 ORDER BY u.username
                 """,
-                (rs, rowNum) -> new AuthUserRecord(
-                        rs.getLong("id"),
-                        rs.getString("username"),
-                        rs.getString("display_name"),
-                        rs.getString("email"),
-                        readNullableLong(rs, "department_id"),
-                        rs.getString("department_name"),
-                        rs.getInt("enabled") == 1,
-                        rs.getInt("totp_enabled") == 1
-                )
+                (rs, rowNum) -> mapUserRecord(rs)
         );
     }
 
     public Optional<AuthUserRecord> findUserById(long id) {
         var users = jdbc.query(
                 """
-                SELECT u.id, u.username, u.display_name, u.email, u.department_id, d.name AS department_name, u.enabled,
+                SELECT u.id, u.username, u.display_name, u.email, u.department_id, d.name AS department_name,
+                       u.employee_id, e.employee_code, e.name AS employee_name, u.enabled,
                        COALESCE(u.totp_enabled, 0) AS totp_enabled
                 FROM auth_user u
                 LEFT JOIN department d ON d.id = u.department_id
+                LEFT JOIN employee e ON e.id = u.employee_id
                 WHERE u.id = ?
                 """,
-                (rs, rowNum) -> new AuthUserRecord(
-                        rs.getLong("id"),
-                        rs.getString("username"),
-                        rs.getString("display_name"),
-                        rs.getString("email"),
-                        readNullableLong(rs, "department_id"),
-                        rs.getString("department_name"),
-                        rs.getInt("enabled") == 1,
-                        rs.getInt("totp_enabled") == 1
-                ),
+                (rs, rowNum) -> mapUserRecord(rs),
                 id
         );
         return users.isEmpty() ? Optional.empty() : Optional.of(users.getFirst());
+    }
+
+    private AuthUserRecord mapUserRecord(java.sql.ResultSet rs) throws java.sql.SQLException {
+        return new AuthUserRecord(
+                rs.getLong("id"),
+                rs.getString("username"),
+                rs.getString("display_name"),
+                rs.getString("email"),
+                readNullableLong(rs, "department_id"),
+                rs.getString("department_name"),
+                readNullableLong(rs, "employee_id"),
+                rs.getString("employee_code"),
+                rs.getString("employee_name"),
+                rs.getInt("enabled") == 1,
+                rs.getInt("totp_enabled") == 1
+        );
     }
 
     public boolean isTotpEnabled(long userId) {
@@ -192,16 +209,17 @@ public class AuthUserRepository {
         );
     }
 
-    public void updateUser(long id, String displayName, String email, Long departmentId, boolean enabled) {
+    public void updateUser(long id, String displayName, String email, Long departmentId, Long employeeId, boolean enabled) {
         jdbc.update(
                 """
                 UPDATE auth_user
-                SET display_name = ?, email = ?, department_id = ?, enabled = ?
+                SET display_name = ?, email = ?, department_id = ?, employee_id = ?, enabled = ?
                 WHERE id = ?
                 """,
                 displayName,
                 email,
                 departmentId,
+                employeeId,
                 enabled ? 1 : 0,
                 id
         );
@@ -250,6 +268,25 @@ public class AuthUserRepository {
         return count != null ? count : 0L;
     }
 
+    public boolean isEmployeeLinkedToOtherUser(long employeeId, Long excludeUserId) {
+        Long count;
+        if (excludeUserId == null) {
+            count = jdbc.queryForObject(
+                    "SELECT COUNT(*) FROM auth_user WHERE employee_id = ?",
+                    Long.class,
+                    employeeId
+            );
+        } else {
+            count = jdbc.queryForObject(
+                    "SELECT COUNT(*) FROM auth_user WHERE employee_id = ? AND id != ?",
+                    Long.class,
+                    employeeId,
+                    excludeUserId
+            );
+        }
+        return count != null && count > 0;
+    }
+
     public List<String> findAdminEmails() {
         return jdbc.query(
                 """
@@ -273,7 +310,7 @@ public class AuthUserRepository {
                 FROM auth_user u
                 JOIN auth_user_role r ON r.user_id = u.id
                 WHERE u.enabled = 1
-                  AND r.role IN ('ADMIN', 'DIVISION_HEAD', 'DEPT_HEAD', 'SALES_HEAD', 'USER')
+                  AND r.role IN ('ADMIN', 'DIVISION_HEAD', 'DEPT_HEAD', 'SALES_HEAD')
                 ORDER BY u.id
                 """,
                 (rs, rowNum) -> rs.getLong("id")
@@ -287,6 +324,9 @@ public class AuthUserRepository {
             String email,
             Long departmentId,
             String departmentName,
+            Long employeeId,
+            String employeeCode,
+            String employeeName,
             boolean enabled,
             boolean totpEnabled
     ) {

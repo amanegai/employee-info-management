@@ -20,7 +20,7 @@ export default function EmployeeTable({
   const allSelected = employees.length > 0 && selectedVisibleCount === employees.length;
   const someSelected = selectedVisibleCount > 0 && !allSelected;
 
-  const colSpan = canDelete ? 11 : 10;
+  const colSpan = canDelete ? 12 : 11;
 
   useEffect(() => {
     if (selectAllRef.current) {
@@ -36,6 +36,7 @@ export default function EmployeeTable({
           <col className="employee-list-col-id" />
           <col className="employee-list-col-name" />
           <col className="employee-list-col-kana" />
+          <col className="employee-list-col-company" />
           <col className="employee-list-col-dept" />
           <col className="employee-list-col-position" />
           <col className="employee-list-col-type" />
@@ -60,6 +61,7 @@ export default function EmployeeTable({
             <th>社員ID</th>
             <th>社員名</th>
             <th>社員名カナ</th>
+            <th>所属会社</th>
             <th>所属部門</th>
             <th>役職</th>
             <th>社員種別</th>
@@ -89,7 +91,11 @@ export default function EmployeeTable({
               <tr
                 key={emp.id}
                 className="employee-row-clickable"
-                onClick={() => navigate(`/employees/${emp.id}`)}
+                onClick={() =>
+                  navigate(`/employees/${emp.id}`, {
+                    state: { from: '/employees', fromLabel: '一覧に戻る' },
+                  })
+                }
                 title="クリックで詳細を表示"
               >
                 <td
@@ -112,6 +118,9 @@ export default function EmployeeTable({
                 </td>
                 <td className="employee-list-cell-text text-muted" title={emp.nameKana || ''}>
                   {emp.nameKana || '—'}
+                </td>
+                <td className="small employee-list-cell-text" title={emp.affiliationCompany || ''}>
+                  {emp.affiliationCompany || '—'}
                 </td>
                 <td className="small employee-list-cell-text" title={emp.departmentName}>{emp.departmentName}</td>
                 <td className="employee-list-cell-text" title={emp.position}>

@@ -27,6 +27,7 @@ public class RelatedDataCleanupRepository {
         jdbc.update("DELETE FROM employee_status_suggestion WHERE employee_id = ?", employeeId);
         jdbc.update("DELETE FROM employee_project_assignment WHERE employee_id = ?", employeeId);
         jdbc.update("DELETE FROM project_candidate WHERE employee_id = ?", employeeId);
+        jdbc.update("DELETE FROM employee_paid_leave_balance WHERE employee_id = ?", employeeId);
         jdbc.update("DELETE FROM employee_status_change_log WHERE employee_id = ?", employeeId);
         jdbc.update("DELETE FROM client_event_participant WHERE employee_id = ?", employeeId);
         jdbc.update("DELETE FROM client_event_reminder_log WHERE employee_id = ?", employeeId);

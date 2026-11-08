@@ -4,6 +4,7 @@ public record EmployeeRequest(
         String employeeCode,
         String name,
         Long departmentId,
+        String affiliationCompany,
         String position,
         String assignmentRole,
         String employeeType,

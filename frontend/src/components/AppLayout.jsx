@@ -1,7 +1,7 @@
 import { NavLink, Outlet, useLocation, useNavigate } from 'react-router-dom';
 import { useCallback, useEffect, useState } from 'react';
 import { api } from '../api';
-import { canManageUsers, canViewClientEvents, canViewClientRecords, canManageHrOps, canViewProjectFeatures, canViewFiles, canWriteProjectFeatures, canViewMeetingRooms, roleIcon, roleLabel } from '../auth';
+import { canManageUsers, canManageMasterData, canViewClientEvents, canViewClientRecords, canManageHrOps, canViewProjectFeatures, canViewFiles, canWriteProjectFeatures, canViewMeetingRooms, canViewEmployeeDirectory, roleIcon, roleLabel } from '../auth';
 import { useAuth } from '../context/AuthContext';
 import { clearProjectMatchStorage } from '../utils/projectMatchState';
 import AppMessageBar from './AppMessageBar';
@@ -93,20 +93,27 @@ export default function AppLayout() {
       <div className="app-sidebar-wrap">
         <aside className={sidebarClassName} aria-label="サイドメニュー">
           <div className="app-sidebar-brand">
-            <div className="app-sidebar-brand-icon" aria-hidden="true">
-              <i className="bi bi-people-fill" />
-            </div>
+            <img
+              src="/brand/bitcross-logo.png"
+              alt="BITCROSS"
+              className="app-sidebar-brand-logo"
+            />
             <div className="app-sidebar-brand-text">
               <span className="app-sidebar-brand-title">社員情報管理</span>
-              <span className="app-sidebar-brand-sub">Talent Management</span>
             </div>
           </div>
         {user && (
           <nav id="app-sidebar-nav" className="app-sidebar-nav" aria-label="メインメニュー">
-            <NavLink to="/" end title="社員一覧" className={({ isActive }) => `app-sidebar-nav-link${isActive ? ' active' : ''}`}>
-              <i className="bi bi-list-ul" aria-hidden="true" />
-              <span className="app-sidebar-nav-label">社員一覧</span>
+            <NavLink to="/" end title="MyPage" className={({ isActive }) => `app-sidebar-nav-link${isActive ? ' active' : ''}`}>
+              <i className="bi bi-person-badge" aria-hidden="true" />
+              <span className="app-sidebar-nav-label">MyPage</span>
             </NavLink>
+            {canViewEmployeeDirectory(user) && (
+              <NavLink to="/employees" end title="社員一覧" className={({ isActive }) => `app-sidebar-nav-link${isActive ? ' active' : ''}`}>
+                <i className="bi bi-list-ul" aria-hidden="true" />
+                <span className="app-sidebar-nav-label">社員一覧</span>
+              </NavLink>
+            )}
             {canViewProjectFeatures(user) && (
               <>
                 <NavLink to="/project-match" title="案件マッチング" className={({ isActive }) => `app-sidebar-nav-link${isActive ? ' active' : ''}`}>
@@ -189,6 +196,12 @@ export default function AppLayout() {
                 <span className="app-sidebar-nav-label">議事録・タスク</span>
               </NavLink>
             )}
+            {canManageMasterData(user) && (
+              <NavLink to="/admin/master-import" title="マスタ一括登録" className={({ isActive }) => `app-sidebar-nav-link${isActive ? ' active' : ''}`}>
+                <i className="bi bi-database-up" aria-hidden="true" />
+                <span className="app-sidebar-nav-label">マスタ一括登録</span>
+              </NavLink>
+            )}
             {canManageUsers(user) && (
               <NavLink to="/users" title="ユーザー管理" className={({ isActive }) => `app-sidebar-nav-link${isActive ? ' active' : ''}`}>
                 <i className="bi bi-person-gear" aria-hidden="true" />
@@ -210,7 +223,22 @@ export default function AppLayout() {
         </button>
       </div>
       <div className="app-layout-main">
-        <header className="app-layout-header app-layout-header-actions-only">
+        <header className="app-layout-header">
+          <div className="app-layout-header-start">
+            <button
+              type="button"
+              className="app-mobile-menu-btn d-lg-none"
+              aria-label={sidebarExpanded ? 'メニューを閉じる' : 'メニューを開く'}
+              aria-expanded={sidebarExpanded}
+              aria-controls="app-sidebar-nav"
+              onClick={() => setSidebarExpanded((open) => !open)}
+            >
+              <i className={`bi ${sidebarExpanded ? 'bi-x-lg' : 'bi-list'}`} aria-hidden="true" />
+            </button>
+            <span className="app-mobile-header-title d-lg-none">
+              <img src="/brand/bitcross-logo.png" alt="BITCROSS" className="app-mobile-header-logo" />
+            </span>
+          </div>
           {user && (
             <div className="app-layout-header-actions">
               <NotificationBell />

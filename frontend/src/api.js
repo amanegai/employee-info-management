@@ -2,6 +2,31 @@ const API_BASE = '/api';
 
 let unauthorizedHandler = null;
 
+async function importMasterFile(path, file, dryRun) {
+  const formData = new FormData();
+  formData.append('file', file);
+  formData.append('dryRun', dryRun ? 'true' : 'false');
+  const res = await fetch(`${API_BASE}${path}`, {
+    method: 'POST',
+    credentials: 'include',
+    body: formData,
+  });
+  if (res.status === 401) {
+    unauthorizedHandler?.();
+  }
+  if (!res.ok) {
+    let message = res.statusText;
+    try {
+      const body = await res.json();
+      message = body.detail || body.message || body.title || message;
+    } catch {
+      /* ignore */
+    }
+    throw new Error(message);
+  }
+  return res.json();
+}
+
 export function setUnauthorizedHandler(handler) {
   unauthorizedHandler = handler;
 }
@@ -50,6 +75,7 @@ export const api = {
   disableMfa: () => request('/auth/mfa/disable', { method: 'POST' }),
   logout: () => request('/auth/logout', { method: 'POST' }),
   getCurrentUser: () => request('/auth/me'),
+  getMyPage: () => request('/mypage'),
   getSummary: () => request('/summary'),
   getMaster: () => request('/master'),
   searchEmployees: (params) => {
@@ -58,6 +84,7 @@ export const api = {
     if (params.employeeCode) q.set('employeeCode', params.employeeCode);
     if (params.name) q.set('name', params.name);
     if (params.departmentId) q.set('departmentId', params.departmentId);
+    if (params.affiliationCompany) q.set('affiliationCompany', params.affiliationCompany);
     if (params.summaryFilter) q.set('summaryFilter', params.summaryFilter);
     if (params.skillKeyword) q.set('skillKeyword', params.skillKeyword);
     if (params.technicalCategory) q.set('technicalCategory', params.technicalCategory);
@@ -69,12 +96,59 @@ export const api = {
     return request(`/employees${query ? `?${query}` : ''}`);
   },
   getEmployeeDetail: (id) => request(`/employees/${id}/detail`),
+  downloadEmployeeResumeExcel: async (id, filename) => {
+    const res = await fetch(`${API_BASE}/employees/${id}/resume.xlsx`, {
+      credentials: 'include',
+    });
+    if (res.status === 401) {
+      unauthorizedHandler?.();
+    }
+    if (!res.ok) {
+      let message = res.statusText;
+      try {
+        const body = await res.json();
+        message = body.detail || body.message || body.title || message;
+      } catch {
+        /* ignore */
+      }
+      throw new Error(message);
+    }
+    const blob = await res.blob();
+    const disposition = res.headers.get('Content-Disposition') || '';
+    const utfMatch = disposition.match(/filename\*=UTF-8''([^;]+)/i);
+    const plainMatch = disposition.match(/filename="?([^";]+)"?/i);
+    const headerName = utfMatch
+      ? decodeURIComponent(utfMatch[1])
+      : plainMatch
+        ? plainMatch[1]
+        : '';
+    const url = URL.createObjectURL(blob);
+    const anchor = document.createElement('a');
+    anchor.href = url;
+    anchor.download = filename || headerName || '技術履歴書.xlsx';
+    document.body.appendChild(anchor);
+    anchor.click();
+    anchor.remove();
+    URL.revokeObjectURL(url);
+  },
   getEmployeeAttendanceMonths: (id) => request(`/employees/${id}/attendance/months`),
   getEmployeeAttendance: (id, targetMonth) =>
     request(`/employees/${id}/attendance?targetMonth=${encodeURIComponent(targetMonth)}`),
   getEmployeePayrollSlips: (id) => request(`/employees/${id}/payroll-slips`),
   getEmployee: (id) => request(`/employees/${id}`),
   getNextEmployeeCode: () => request('/employee-code/next'),
+  recommendEmployeeCode: (employeeType, departmentId, affiliationCompany) => {
+    const q = new URLSearchParams();
+    q.set('employeeType', employeeType);
+    q.set('departmentId', String(departmentId));
+    if (affiliationCompany) q.set('affiliationCompany', affiliationCompany);
+    return request(`/employee-code/recommend?${q}`);
+  },
+  employeeCodeExists: (code) => {
+    const q = new URLSearchParams();
+    q.set('code', code ?? '');
+    return request(`/employee-code/exists?${q}`);
+  },
   createEmployee: (body) =>
     request('/employees', { method: 'POST', body: JSON.stringify(body) }),
   createEmployeeFromImport: (body) =>
@@ -83,6 +157,8 @@ export const api = {
     request(`/employees/${id}`, { method: 'PUT', body: JSON.stringify(body) }),
   deleteEmployee: (id) => request(`/employees/${id}`, { method: 'DELETE' }),
   listUsers: () => request('/admin/users'),
+  importMasterEmployees: (file, dryRun = true) => importMasterFile('/admin/master/employees/import', file, dryRun),
+  importMasterClients: (file, dryRun = true) => importMasterFile('/admin/master/clients/import', file, dryRun),
   createUser: (body) => request('/admin/users', { method: 'POST', body: JSON.stringify(body) }),
   updateUser: (id, body) => request(`/admin/users/${id}`, { method: 'PUT', body: JSON.stringify(body) }),
   deleteUser: (id) => request(`/admin/users/${id}`, { method: 'DELETE' }),

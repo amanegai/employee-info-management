@@ -37,6 +37,7 @@ function buildAutoDeductionValues(salary, personal, hr) {
 
 const EMPTY_HR = {
   hireDate: '',
+  resignationDate: '',
   contractStartDate: '',
   contractEndDate: '',
   socialInsuranceStatus: '',
@@ -280,17 +281,6 @@ export default function SalaryFormTab({ form, onChange, readOnly = false }) {
       <SectionCard title="人事情報" icon="bi-person-badge" headerColor="#6f42c1" className="mt-3">
         <div className="row g-3 detail-form-hr-fields">
           <div className="col-md-6 col-lg-3">
-            <FormField label="入社日" htmlFor="hireDate">
-              <input
-                id="hireDate"
-                type="date"
-                className="form-control"
-                value={hr.hireDate}
-                onChange={(e) => updateHr('hireDate', e.target.value)}
-              />
-            </FormField>
-          </div>
-          <div className="col-md-6 col-lg-3">
             <FormField label="契約開始日" htmlFor="contractStartDate">
               <input
                 id="contractStartDate"
@@ -309,17 +299,6 @@ export default function SalaryFormTab({ form, onChange, readOnly = false }) {
                 className="form-control"
                 value={hr.contractEndDate}
                 onChange={(e) => updateHr('contractEndDate', e.target.value)}
-              />
-            </FormField>
-          </div>
-          <div className="col-md-6 col-lg-3">
-            <FormField label="有給起算日" htmlFor="paidLeaveStartDate">
-              <input
-                id="paidLeaveStartDate"
-                type="date"
-                className="form-control"
-                value={hr.paidLeaveStartDate}
-                onChange={(e) => updateHr('paidLeaveStartDate', e.target.value)}
               />
             </FormField>
           </div>

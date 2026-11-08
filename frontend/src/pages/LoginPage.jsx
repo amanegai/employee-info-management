@@ -181,29 +181,29 @@ export default function LoginPage() {
   return (
     <div className="login-page">
       <div className="login-page-bg" aria-hidden="true">
-        <span className="login-blob login-blob-1" />
-        <span className="login-blob login-blob-2" />
-        <span className="login-blob login-blob-3" />
+        <span className="login-orb login-orb-1" />
+        <span className="login-orb login-orb-2" />
+        <span className="login-grid-fade" />
       </div>
 
       <div className="login-shell">
-        <div className="login-card">
-          <aside className="login-brand-panel">
-            <div className="login-brand-content">
-              <div className="login-logo">
-                <i className="bi bi-people-fill" aria-hidden="true" />
+        <div className="login-panel">
+          <aside className="login-panel-brand">
+            <div className="login-panel-brand-inner">
+              <div className="login-panel-logo-wrap">
+                <img
+                  src="/brand/bitcross-logo.png"
+                  alt="BITCROSS"
+                  className="login-panel-logo"
+                />
               </div>
-              <div className="login-brand-heading">
-                <p className="login-brand-eyebrow">派遣会社向けプラットフォーム</p>
-                <h1 className="login-brand-title">
-                  <span className="login-brand-title-main">社員情報</span>
-                  <span className="login-brand-title-sub">管理</span>
-                </h1>
-                <p className="login-brand-tagline">
-                  Manage talent, skills, and projects in one place.
+              <div className="login-panel-product">
+                <p className="login-panel-product-name">社員情報管理</p>
+                <p className="login-panel-product-tagline">
+                  人材・スキル・案件を、ひとつの場所で。
                 </p>
               </div>
-              <ul className="login-brand-features">
+              <ul className="login-panel-points">
                 <li>
                   <i className="bi bi-check2-circle" aria-hidden="true" />
                   社員・スキル・評価を統合管理
@@ -467,7 +467,7 @@ export default function LoginPage() {
           </div>
         </div>
 
-        <p className="login-footer-note">Copyright © 社員情報管理システム 2026</p>
+        <p className="login-footer-note">Copyright © BITCROSS 2026</p>
       </div>
     </div>
   );

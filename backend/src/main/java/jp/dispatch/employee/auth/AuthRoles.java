@@ -3,7 +3,10 @@ package jp.dispatch.employee.auth;
 public final class AuthRoles {
     public static final String ADMIN = "ADMIN";
     public static final String HR = "HR";
+    /** @deprecated 廃止済み。互換のため定数のみ残す */
     public static final String USER = "USER";
+    /** 一般社員：MyPage のみ */
+    public static final String EMPLOYEE = "EMPLOYEE";
     /** 事業部長：自事業部配下の全社員を閲覧可 */
     public static final String DIVISION_HEAD = "DIVISION_HEAD";
     /** 部長：自部門の社員のみ閲覧可 */

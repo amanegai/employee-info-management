@@ -100,6 +100,15 @@ public class ClientService {
 
     @Transactional
     public ClientDetailDto create(ClientSaveRequest request) {
+        return insertClient(request, true);
+    }
+
+    /** マスタ一括登録：件ごとの監査は記録しない */
+    public ClientDetailDto createFromMaster(ClientSaveRequest request) {
+        return insertClient(request, false);
+    }
+
+    private ClientDetailDto insertClient(ClientSaveRequest request, boolean writeAudit) {
         requireWritePermission();
         validateSaveRequest(request);
 
@@ -108,7 +117,9 @@ public class ClientService {
         long id = repository.insert(clientCode, request, resolveLocation(request), now, now);
         saveContacts(id, request);
 
-        auditLogService.log(AuditAction.CLIENT_CREATE, "dispatch_client", String.valueOf(id), request.name());
+        if (writeAudit) {
+            auditLogService.log(AuditAction.CLIENT_CREATE, "dispatch_client", String.valueOf(id), request.name());
+        }
         return getById(id);
     }
 

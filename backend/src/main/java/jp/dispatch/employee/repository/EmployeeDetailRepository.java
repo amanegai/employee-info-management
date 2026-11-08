@@ -49,6 +49,7 @@ public class EmployeeDetailRepository {
                 emp.name(),
                 emp.departmentId(),
                 emp.departmentName(),
+                emp.affiliationCompany(),
                 emp.position(),
                 emp.assignmentRole(),
                 emp.employeeType(),
@@ -601,14 +602,15 @@ public class EmployeeDetailRepository {
         jdbc.update(
                 """
                 INSERT INTO employee_hr
-                    (employee_id, hire_date, contract_start_date, contract_end_date,
+                    (employee_id, hire_date, resignation_date, contract_start_date, contract_end_date,
                      social_insurance_status, employment_insurance_no, pension_no,
                      emergency_contact_name, emergency_contact_phone, emergency_contact_relation,
                      paid_leave_start_date)
-                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
                 """,
                 employeeId,
                 blankToNull(hr.hireDate()),
+                blankToNull(hr.resignationDate()),
                 blankToNull(hr.contractStartDate()),
                 blankToNull(hr.contractEndDate()),
                 blankToNull(hr.socialInsuranceStatus()),
@@ -623,6 +625,7 @@ public class EmployeeDetailRepository {
 
     private boolean isHrEmpty(HrDto hr) {
         return isBlank(hr.hireDate())
+                && isBlank(hr.resignationDate())
                 && isBlank(hr.contractStartDate())
                 && isBlank(hr.contractEndDate())
                 && isBlank(hr.socialInsuranceStatus())
@@ -928,7 +931,7 @@ public class EmployeeDetailRepository {
     private Optional<HrDto> findHr(long employeeId) {
         var list = jdbc.query(
                 """
-                SELECT hire_date, contract_start_date, contract_end_date,
+                SELECT hire_date, resignation_date, contract_start_date, contract_end_date,
                        social_insurance_status, employment_insurance_no, pension_no,
                        emergency_contact_name, emergency_contact_phone, emergency_contact_relation,
                        paid_leave_start_date
@@ -936,6 +939,7 @@ public class EmployeeDetailRepository {
                 """,
                 (rs, rowNum) -> new HrDto(
                         rs.getString("hire_date"),
+                        rs.getString("resignation_date"),
                         rs.getString("contract_start_date"),
                         rs.getString("contract_end_date"),
                         rs.getString("social_insurance_status"),

@@ -8,6 +8,7 @@ public record EmployeeDetailDto(
         String name,
         Long departmentId,
         String departmentName,
+        String affiliationCompany,
         String position,
         String assignmentRole,
         String employeeType,
@@ -195,6 +196,7 @@ public record EmployeeDetailDto(
 
     public record HrDto(
             String hireDate,
+            String resignationDate,
             String contractStartDate,
             String contractEndDate,
             String socialInsuranceStatus,
@@ -214,6 +216,7 @@ public record EmployeeDetailDto(
                 name,
                 departmentId,
                 departmentName,
+                affiliationCompany,
                 position,
                 assignmentRole,
                 employeeType,

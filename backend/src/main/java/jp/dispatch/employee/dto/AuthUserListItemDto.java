@@ -10,6 +10,9 @@ public record AuthUserListItemDto(
         List<String> roles,
         Long departmentId,
         String departmentName,
+        Long employeeId,
+        String employeeCode,
+        String employeeName,
         boolean enabled,
         boolean totpEnabled
 ) {

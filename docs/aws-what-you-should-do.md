@@ -11,6 +11,7 @@
 
 相关文档：
 
+- **再发布・启停命令速查**：[aws-redeploy.md](aws-redeploy.md)
 - **过程记录（实操）**：[aws-deployment-log.md](aws-deployment-log.md)
 - 同事确认用：`aws-deployment-checklist.md`
 - Linux/Docker 步骤：`deploy-linux.md`
