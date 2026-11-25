@@ -279,7 +279,7 @@ public class ResumeExcelExportService {
         setValue(sheet, 51, 4, text(p != null ? p.specialtyBusiness() : null));
         setValue(sheet, 52, 4, text(p != null ? p.selfPr() : null));
 
-        writeCareers(sheet, detail.careers());
+        writeCareers(sheet, detail.careers(), p != null ? p.remarks() : null);
     }
 
     private void writeSkillLevels(Sheet sheet, List<TechnicalSkillDto> skills) {
@@ -298,7 +298,7 @@ public class ResumeExcelExportService {
         }
     }
 
-    private void writeCareers(Sheet sheet, List<CareerDto> careers) {
+    private void writeCareers(Sheet sheet, List<CareerDto> careers, String remarks) {
         List<CareerDto> list = sortCareersOldestFirst(careers);
         Row templateRow = sheet.getRow(CAREER_FIRST_ROW - 1);
         if (templateRow != null) {
@@ -307,6 +307,7 @@ public class ResumeExcelExportService {
         clearCareerPlaceholder(sheet);
 
         if (list.isEmpty()) {
+            writeRemarksRow(sheet, REMARKS_TEMPLATE_ROW, remarks);
             return;
         }
 
@@ -328,9 +329,17 @@ public class ResumeExcelExportService {
             index++;
         }
 
-        int remarksRow = CAREER_FIRST_ROW + list.size();
+        writeRemarksRow(sheet, CAREER_FIRST_ROW + list.size(), remarks);
+    }
+
+    /** 経歴末尾の備考行（A列=ラベル、B列以降=本文） */
+    private void writeRemarksRow(Sheet sheet, int remarksRow, String remarks) {
         setValue(sheet, remarksRow, 1, "備考");
         ensureRemarksMerge(sheet, remarksRow);
+        String body = text(remarks);
+        if (!body.isEmpty()) {
+            setValue(sheet, remarksRow, 2, body);
+        }
     }
 
     private static List<CareerDto> sortCareersOldestFirst(List<CareerDto> careers) {

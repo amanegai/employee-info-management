@@ -12,7 +12,6 @@ import {
   SKILL_MARK_OPTIONS,
   EMPTY_DISPLAY,
   formatYearsInJapan,
-  excludeParentDepartments,
   assignmentRoleLabel,
 } from '../../../utils';
 import {
@@ -61,11 +60,8 @@ export default function BasicFormTab({
     : AFFILIATION_COMPANIES;
 
   const departmentOptions = useMemo(() => {
-    const base = excludeParentDepartments(
-      master?.assignableDepartments ??
-      master?.departments ??
-      []
-    );
+    // ビットクロスは事業部単体所属を許可するため、親部門も選択肢に含める
+    const base = master?.assignableDepartments ?? master?.departments ?? [];
     const filtered = filterDepartmentsForEmployeeType(
       base,
       form.employeeType,
@@ -88,7 +84,7 @@ export default function BasicFormTab({
 
   function syncDepartmentForCompany(nextForm) {
     const allowed = filterDepartmentsForEmployeeType(
-      excludeParentDepartments(master?.assignableDepartments ?? master?.departments ?? []),
+      master?.assignableDepartments ?? master?.departments ?? [],
       nextForm.employeeType,
       nextForm.affiliationCompany
     );
@@ -559,7 +555,7 @@ export default function BasicFormTab({
         <h6 className="detail-form-subsection-title">最終学歴</h6>
         <div className="row g-3 detail-form-personal-fields mb-3">
           <div className="col-md-4">
-            <FormField label="学位" htmlFor="educationDegree">
+            <FormField label="最終学歴" htmlFor="educationDegree">
               <select
                 id="educationDegree"
                 className="form-select"
@@ -738,6 +734,17 @@ export default function BasicFormTab({
                 rows={4}
                 value={form.personal.selfPr}
                 onChange={(e) => updatePersonal('selfPr', e.target.value)}
+              />
+            </FormField>
+          </div>
+          <div className="col-12">
+            <FormField label="備考" htmlFor="personalRemarks">
+              <textarea
+                id="personalRemarks"
+                className="form-control"
+                rows={3}
+                value={form.personal.remarks}
+                onChange={(e) => updatePersonal('remarks', e.target.value)}
               />
             </FormField>
           </div>

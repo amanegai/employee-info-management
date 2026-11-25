@@ -5,8 +5,12 @@ public final class AuthRoles {
     public static final String HR = "HR";
     /** @deprecated 廃止済み。互換のため定数のみ残す */
     public static final String USER = "USER";
-    /** 一般社員：MyPage のみ */
+    /** 一般社員（正社員）：MyPage のみ */
     public static final String EMPLOYEE = "EMPLOYEE";
+    /** 契約社員：MyPage のみ（有給対象） */
+    public static final String CONTRACT = "CONTRACT";
+    /** 個人事業主：MyPage のみ（有給対象外） */
+    public static final String FREELANCER = "FREELANCER";
     /** 事業部長：自事業部配下の全社員を閲覧可 */
     public static final String DIVISION_HEAD = "DIVISION_HEAD";
     /** 部長：自部門の社員のみ閲覧可 */
@@ -15,5 +19,10 @@ public final class AuthRoles {
     public static final String SALES_HEAD = "SALES_HEAD";
 
     private AuthRoles() {
+    }
+
+    /** MyPage 専用ロール（業務メニューなし・兼職不可） */
+    public static boolean isMyPageOnlyRole(String role) {
+        return EMPLOYEE.equals(role) || CONTRACT.equals(role) || FREELANCER.equals(role);
     }
 }

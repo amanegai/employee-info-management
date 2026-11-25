@@ -233,9 +233,12 @@ export default function UserManagementPage() {
     setEmployeeLookupLoading(true);
     try {
       const list = await api.searchEmployees({ keyword });
-      const results = list ?? [];
+      // BP は社員OAにログインしないため連携候補から除外
+      const results = (list ?? []).filter((emp) => emp.employeeType !== 'BP');
       if (results.length === 0) {
-        setEmployeeLookupError(`「${keyword}」に該当する社員が見つかりませんでした`);
+        setEmployeeLookupError(
+          `「${keyword}」に該当する連携可能な社員が見つかりませんでした（BP は連携不可）`
+        );
         return;
       }
       if (results.length === 1) {
@@ -259,6 +262,10 @@ export default function UserManagementPage() {
   }
 
   function selectEmployeeLink(emp) {
+    if (emp.employeeType === 'BP') {
+      setEmployeeLookupError('BP 社員は社員OAにログインできないため連携できません');
+      return;
+    }
     setForm((prev) => ({
       ...prev,
       employeeId: String(emp.id),
@@ -340,7 +347,7 @@ export default function UserManagementPage() {
       }
       const primaryRow = form.assignments.find((a) => a.primary);
       if (primaryRoleDisallowsSideAssignments(primaryRow?.role) && form.assignments.length > 1) {
-        throw new Error('管理者・一般社員の本職では兼職を設定できません');
+        throw new Error('管理者・一般社員・契約社員・個人事業主の本職では兼職を設定できません');
       }
       const invalidSide = form.assignments.find(
         (a) => !a.primary && !isSideAssignmentRoleAllowed(a.role),
@@ -952,14 +959,14 @@ export default function UserManagementPage() {
                         title={
                           canAddSideAssignment
                             ? undefined
-                            : '管理者・一般社員の本職では兼職を追加できません'
+                            : '管理者・一般社員・契約社員・個人事業主の本職では兼職を追加できません'
                         }
                       >
                         <i className="bi bi-plus-lg" aria-hidden="true" /> 兼職を追加
                       </button>
                       {!canAddSideAssignment && (
                         <p className="user-form-role-hint mb-3">
-                          本職が管理者または一般社員の場合、兼職は追加できません。
+                          本職が管理者・一般社員・契約社員・個人事業主の場合、兼職は追加できません。
                         </p>
                       )}
                       <div className="user-form-grid user-form-grid-2">
@@ -1050,7 +1057,8 @@ export default function UserManagementPage() {
                             </p>
                           )}
                           <p className="user-form-role-hint mb-0 mt-1">
-                            社員番号・氏名の一部で曖昧検索できます。一般社員ロールでは MyPage のため連携を推奨します。
+                            社員番号・氏名の一部で曖昧検索できます。一般社員・契約社員・個人事業主ロールは MyPage
+                            のみのため連携を推奨します（BP は連携不可）。
                           </p>
                         </div>
                       </div>

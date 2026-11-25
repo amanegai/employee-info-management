@@ -27,7 +27,8 @@ CREATE TABLE IF NOT EXISTS employee_personal (
     technical_level   TEXT,
     specialty_dev     TEXT,
     specialty_business TEXT,
-    self_pr           TEXT
+    self_pr           TEXT,
+    remarks           TEXT
 );
 
 CREATE TABLE IF NOT EXISTS employee_technical_skill (
@@ -160,6 +161,7 @@ ALTER TABLE employee_personal ADD COLUMN technical_level TEXT;
 ALTER TABLE employee_personal ADD COLUMN specialty_dev TEXT;
 ALTER TABLE employee_personal ADD COLUMN specialty_business TEXT;
 ALTER TABLE employee_personal ADD COLUMN self_pr TEXT;
+ALTER TABLE employee_personal ADD COLUMN remarks TEXT;
 
 ALTER TABLE employee_career ADD COLUMN start_date TEXT;
 ALTER TABLE employee_career ADD COLUMN end_date TEXT;

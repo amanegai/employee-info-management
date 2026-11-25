@@ -2,10 +2,17 @@ import SectionCard from '../SectionCard';
 import StarRating from '../StarRating';
 import TechnicalSkillMatrix from '../../skills/TechnicalSkillMatrix';
 import { technicalSkillsToMap } from '../../../constants/technicalSkillTemplate';
-import { getCareerTitleSuffix, sortCareersByNewestFirst } from '../../../utils';
+import {
+  getCareerTitleSuffix,
+  sortCareersByNewestFirst,
+  splitQualificationLines,
+} from '../../../utils';
 export default function SkillsTab({ employee }) {
   const { skills, qualifications, careers, technicalSkills } = employee;
   const technicalSkillMap = technicalSkillsToMap(technicalSkills);
+  const qualificationLines = (qualifications || []).flatMap((q) =>
+    splitQualificationLines(q.description)
+  );
   return (
     <>
       <SectionCard title="スキル評価" icon="bi-tools" variant="green">
@@ -43,10 +50,10 @@ export default function SkillsTab({ employee }) {
       </SectionCard>
 
       <SectionCard title="保有資格" icon="bi-award" variant="amber" className="mt-3">
-        {qualifications?.length ? (
+        {qualificationLines.length ? (
           <ul className="detail-qual-list mb-0">
-            {qualifications.map((q, i) => (
-              <li key={i}>{q.description}</li>
+            {qualificationLines.map((line, i) => (
+              <li key={i}>{line}</li>
             ))}
           </ul>
         ) : (

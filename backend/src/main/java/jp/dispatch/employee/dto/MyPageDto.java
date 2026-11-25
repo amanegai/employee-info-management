@@ -21,11 +21,16 @@ public record MyPageDto(
         String email,
         String phone,
         String nearestStation,
-        /** 今年度有給残。未初期化・未連携時は null */
+        /**
+         * 有給対象か。連携なしは null。
+         * true=正社員・契約社員、false=個人事業主等（表示は「対象外」）
+         */
+        Boolean paidLeaveEligible,
+        /** 今年度有給残。未初期化・対象外・未連携時は null */
         Integer paidLeaveCurrentYearRemaining,
-        /** 前年度有給残（繰越）。未初期化・未連携時は null */
+        /** 前年度有給残（繰越）。未初期化・対象外・未連携時は null */
         Integer paidLeavePreviousYearRemaining,
-        /** 合計残（互換・表示用）。未初期化・未連携時は null */
+        /** 合計残（互換・表示用）。未初期化・対象外・未連携時は null */
         Integer paidLeaveRemaining,
         /** 管理者のみ。一般ユーザーは null */
         MyPageAdminOverviewDto adminOverview

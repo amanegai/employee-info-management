@@ -4,7 +4,6 @@ import { api } from '../api';
 import { canReviewBpReferral, canWriteProjectFeatures } from '../auth';
 import { useAuth } from '../context/AuthContext';
 import { useAppMessage } from '../context/MessageContext';
-import { excludeParentDepartments } from '../utils';
 import {
   AFFILIATION_COMPANY_BITCROSS,
   DEPT_SONOTA,
@@ -116,7 +115,7 @@ export default function BpHelpReferralPanel({ project, enabled, onProjectChanged
       try {
         const master = await api.getMaster();
         if (cancelled) return;
-        setDepartments(excludeParentDepartments(master?.departments ?? []));
+        setDepartments(master?.departments ?? []);
       } catch {
         /* 部門マスタが取れなくても採用自体は可能 */
       }

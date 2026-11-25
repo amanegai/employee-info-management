@@ -21,7 +21,8 @@ import {
   clearEmployeeImportBatch,
   readEmployeeImportBatch,
 } from '../utils/employeeImportPrefill';
-import { excludeParentDepartments, formToSavePayload } from '../utils';
+import { formToSavePayload } from '../utils';
+import { isResumeFormatErrorMessage } from '../utils/resumeImport';
 
 function ageFromBirthDate(birthDate) {
   if (!birthDate) return '';
@@ -43,22 +44,24 @@ function typeOptionLabel(type) {
 }
 
 function createRowState(item) {
+  const parseError = item.parseError || '';
+  const errorKind = item.errorKind || (parseError ? 'format' : 'correctable');
   return {
     localId: item.localId,
     fileName: item.fileName || '',
     form: item.form || null,
-    parseError: item.parseError || '',
-    selected: !item.parseError && Boolean(item.form?.name),
-    employeeCode: '',
-    affiliationCompany: AFFILIATION_COMPANY_BITCROSS,
-    employeeType: '',
-    departmentId: '',
-    position: item.form?.position || '',
-    hireDate: item.form?.hr?.hireDate || '',
-    codeError: '',
+    parseError,
+    errorKind,
+    selected: errorKind !== 'format' && !parseError && Boolean(item.form?.name),
+    employeeCode: item.employeeCode || '',
+    affiliationCompany: item.affiliationCompany || AFFILIATION_COMPANY_BITCROSS,
+    employeeType: item.employeeType || item.form?.employeeType || '',
+    departmentId: item.departmentId || item.form?.departmentId || '',
+    hireDate: item.hireDate || item.form?.hr?.hireDate || '',
+    codeError: item.codeError || '',
     codeChecking: false,
     recommendHint: '',
-    registerError: '',
+    registerError: item.registerHint || '',
   };
 }
 
@@ -72,13 +75,13 @@ export default function ResumeImportConfirmPage() {
   const [batchCompany, setBatchCompany] = useState(AFFILIATION_COMPANY_BITCROSS);
   const [batchType, setBatchType] = useState('');
   const [batchDeptId, setBatchDeptId] = useState('');
-  const [batchPosition, setBatchPosition] = useState('');
   const [batchHireDate, setBatchHireDate] = useState('');
   const [loading, setLoading] = useState(true);
   const [registering, setRegistering] = useState(false);
 
+  // ビットクロスの事業部単体所属を許可するため、親部門も選択肢に含める
   const departments = useMemo(
-    () => excludeParentDepartments(filterDepartmentsByScope(master?.departments ?? [], user)),
+    () => filterDepartmentsByScope(master?.departments ?? [], user),
     [master, user]
   );
 
@@ -112,6 +115,23 @@ export default function ResumeImportConfirmPage() {
       }
     })();
   }, [user, navigate, showMessage]);
+
+  // ファイル名から預填済みの行へ推奨社員IDを取得
+  useEffect(() => {
+    if (!master || rows.length === 0) return;
+    rows.forEach((row) => {
+      if (
+        !row.parseError &&
+        row.employeeType &&
+        row.departmentId &&
+        row.affiliationCompany &&
+        !row.recommendHint
+      ) {
+        void refreshRecommend(row, row.employeeType, row.departmentId, row.affiliationCompany);
+      }
+    });
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- 初回マスター取得時のみ
+  }, [master]);
 
   const updateRow = useCallback((localId, patch) => {
     setRows((prev) => prev.map((row) => (row.localId === localId ? { ...row, ...patch } : row)));
@@ -228,9 +248,9 @@ export default function ResumeImportConfirmPage() {
   }
 
   function applyBatchDefaults() {
-    if (!batchCompany && !batchType && !batchDeptId && !batchPosition && !batchHireDate) {
+    if (!batchCompany && !batchType && !batchDeptId && !batchHireDate) {
       showMessage(
-        '一括設定の所属会社・社員種別・所属部門・役職・入社日のいずれかを選択してください',
+        '一括設定の所属会社・社員種別・所属部門・入社日のいずれかを選択してください',
         'warning'
       );
       return;
@@ -249,7 +269,6 @@ export default function ResumeImportConfirmPage() {
         affiliationCompany,
         employeeType,
         departmentId,
-        position: batchPosition || row.position,
         hireDate: batchHireDate || row.hireDate,
         codeError: '',
         registerError: '',
@@ -329,7 +348,7 @@ export default function ResumeImportConfirmPage() {
           affiliationCompany: row.affiliationCompany,
           employeeType: row.employeeType,
           departmentId: row.departmentId,
-          position: row.position || '',
+          position: '',
           workStatus: row.form.workStatus || '待機中',
           hr: {
             ...(row.form.hr || {}),
@@ -347,7 +366,17 @@ export default function ResumeImportConfirmPage() {
       } catch (e) {
         const message = e.message || '登録に失敗しました';
         failures.push({ fileName: row.fileName, name: row.form?.name, message });
-        nextRows[idx] = { ...nextRows[idx], registerError: message };
+        if (isResumeFormatErrorMessage(message)) {
+          nextRows[idx] = {
+            ...nextRows[idx],
+            parseError: message,
+            errorKind: 'format',
+            registerError: '',
+            selected: false,
+          };
+        } else {
+          nextRows[idx] = { ...nextRows[idx], registerError: message };
+        }
       }
     }
 
@@ -398,14 +427,22 @@ export default function ResumeImportConfirmPage() {
       />
 
       <div className="alert alert-info py-2 resume-import-hint" role="status">
-        <div className="fw-semibold mb-1">登録前に設定する項目</div>
+        <div className="fw-semibold mb-1">この画面でできること</div>
         <div className="small mb-0">
-          必須：所属会社・社員種別・所属部門・入社日・社員ID　／　任意：役職
+          <strong>修正・補完できるもの：</strong>
+          ファイル名の不足（所属会社・社員種別・所属部門・社員ID・入社日）、社員ID重複など
           <br />
-          社員ID：<code>btc</code> / <code>als</code> / <code>swt</code> ＋ 種別英字（S/K/P/B）＋ 5桁（例：btcS00001）
+          <strong>この画面では直せないもの（ファイル要修正）：</strong>
+          レイアウト崩れ、スキル評価が◎〇△以外、職務経歴の同一期間重複など。Excel
+          を直して再取り込みしてください
+          <br />
+          ファイル名形式：
+          <code>{'{社員ID}_技術者履歴書_{YYYY-MM-DD}_{所属部門}.xlsx'}</code>
+          （揃っていれば確認画面を省略して自動登録）
         </div>
       </div>
 
+      {rows.some((r) => r.errorKind !== 'format' && !r.parseError) ? (
       <section className="list-section-panel resume-import-batch-bar mb-3" aria-label="一括設定">
         <div className="list-section-body py-3">
           <div className="resume-import-batch-title">一括設定</div>
@@ -479,24 +516,6 @@ export default function ResumeImportConfirmPage() {
               </select>
             </div>
             <div>
-              <label className="form-label small mb-1" htmlFor="batch-position">
-                役職（任意）
-              </label>
-              <select
-                id="batch-position"
-                className="form-select"
-                value={batchPosition}
-                onChange={(e) => setBatchPosition(e.target.value)}
-              >
-                <option value="">未設定</option>
-                {(master?.positions ?? []).map((p) => (
-                  <option key={p} value={p}>
-                    {p}
-                  </option>
-                ))}
-              </select>
-            </div>
-            <div>
               <label className="form-label small mb-1" htmlFor="batch-hire-date">
                 入社日（任意）
               </label>
@@ -517,6 +536,7 @@ export default function ResumeImportConfirmPage() {
           </div>
         </div>
       </section>
+      ) : null}
 
       <section className="resume-import-card-list" aria-label="インポート確認一覧">
         {rows.map((row) => {
@@ -526,12 +546,13 @@ export default function ResumeImportConfirmPage() {
             row.employeeType,
             row.affiliationCompany
           );
+          const isFormatError = row.errorKind === 'format' || Boolean(row.parseError);
           const hasError = Boolean(row.parseError || row.codeError || row.registerError);
-          const disabled = Boolean(row.parseError) || row.registered || registering || !row.selected;
+          const disabled = isFormatError || row.registered || registering || !row.selected;
           const age = ageFromBirthDate(personal.birthDate);
           const nation = nationalityLabel(row.form, master?.nationalities ?? []);
-          const statusLabel = row.parseError
-            ? '解析エラー'
+          const statusLabel = isFormatError
+            ? 'ファイル要修正'
             : row.registered
               ? '登録済'
               : row.registerError || row.codeError
@@ -543,7 +564,7 @@ export default function ResumeImportConfirmPage() {
           return (
             <article
               key={row.localId}
-              className={`resume-import-card${hasError ? ' is-error' : ''}${row.registered ? ' is-done' : ''}${!row.selected && !row.parseError && !row.registered ? ' is-skipped' : ''}`}
+              className={`resume-import-card${hasError ? ' is-error' : ''}${isFormatError ? ' is-format-error' : ''}${row.registered ? ' is-done' : ''}${!row.selected && !isFormatError && !row.registered ? ' is-skipped' : ''}`}
             >
               <header className="resume-import-card-head">
                 <label className="resume-import-card-check">
@@ -551,24 +572,26 @@ export default function ResumeImportConfirmPage() {
                     type="checkbox"
                     className="form-check-input"
                     checked={row.selected}
-                    disabled={Boolean(row.parseError) || row.registered || registering}
+                    disabled={isFormatError || row.registered || registering}
                     onChange={(e) => updateRow(row.localId, { selected: e.target.checked })}
                     aria-label={`${row.form?.name || row.fileName} を登録対象にする`}
                   />
                 </label>
                 <div className="resume-import-card-identity">
                   <div className="resume-import-card-name">
-                    {row.form?.name || '—'}
-                    {personal.furigana ? (
+                    {row.form?.name || (isFormatError ? '取り込み不可' : '—')}
+                    {row.form?.name && personal.furigana ? (
                       <span className="resume-import-card-kana">（{personal.furigana}）</span>
                     ) : null}
                   </div>
                   <div className="resume-import-card-file text-break">{row.fileName}</div>
-                  <div className="resume-import-card-meta">
-                    {personal.gender ? <span>{personal.gender}</span> : null}
-                    {age ? <span>{age}歳</span> : null}
-                    {nation ? <span>{nation}</span> : null}
-                  </div>
+                  {row.form?.name ? (
+                    <div className="resume-import-card-meta">
+                      {personal.gender ? <span>{personal.gender}</span> : null}
+                      {age ? <span>{age}歳</span> : null}
+                      {nation ? <span>{nation}</span> : null}
+                    </div>
+                  ) : null}
                 </div>
                 <span
                   className={`resume-import-card-status${hasError ? ' is-error' : ''}${row.registered ? ' is-done' : ''}`}
@@ -577,7 +600,16 @@ export default function ResumeImportConfirmPage() {
                 </span>
               </header>
 
-              {!row.parseError ? (
+              {isFormatError ? (
+                <div className="resume-import-card-format-hint">
+                  <div className="fw-semibold mb-1">ファイルを修正してください</div>
+                  <div className="small mb-2">{row.parseError}</div>
+                  <div className="small text-muted mb-0">
+                    形式の崩れや履歴書データの不備は、この画面の設定では登録できません。Excel
+                    を確認・修正したうえで、再度取り込んでください。
+                  </div>
+                </div>
+              ) : (
                 <div className="resume-import-card-body">
                   <div className="resume-import-field">
                     <label className="form-label small mb-1" htmlFor={`company-${row.localId}`}>
@@ -635,43 +667,6 @@ export default function ResumeImportConfirmPage() {
                       ))}
                     </select>
                   </div>
-                  <div className="resume-import-field">
-                    <label className="form-label small mb-1" htmlFor={`position-${row.localId}`}>
-                      役職
-                    </label>
-                    <select
-                      id={`position-${row.localId}`}
-                      className="form-select form-select-sm"
-                      value={row.position}
-                      disabled={disabled}
-                      onChange={(e) => updateRow(row.localId, { position: e.target.value })}
-                    >
-                      <option value="">未設定</option>
-                      {(master?.positions ?? []).map((p) => (
-                        <option key={p} value={p}>
-                          {p}
-                        </option>
-                      ))}
-                    </select>
-                  </div>
-                  <div className="resume-import-field">
-                    <label className="form-label small mb-1" htmlFor={`hire-${row.localId}`}>
-                      入社日 <span className="text-danger">*</span>
-                    </label>
-                    <input
-                      id={`hire-${row.localId}`}
-                      type="date"
-                      className={`form-control form-control-sm${!row.hireDate && row.selected && !row.registered ? ' is-invalid' : ''}`}
-                      value={row.hireDate}
-                      disabled={disabled}
-                      onChange={(e) =>
-                        updateRow(row.localId, {
-                          hireDate: e.target.value,
-                          registerError: '',
-                        })
-                      }
-                    />
-                  </div>
                   <div className="resume-import-field resume-import-field--code">
                     <label className="form-label small mb-1" htmlFor={`code-${row.localId}`}>
                       社員ID <span className="text-danger">*</span>
@@ -719,14 +714,32 @@ export default function ResumeImportConfirmPage() {
                     )}
                     {row.codeChecking ? <div className="small text-muted">確認中…</div> : null}
                   </div>
-                </div>
-              ) : null}
-
-              {(row.parseError || row.registerError || row.codeError) && (
-                <div className="resume-import-card-error">
-                  {row.parseError || row.registerError || row.codeError}
+                  <div className="resume-import-field">
+                    <label className="form-label small mb-1" htmlFor={`hire-${row.localId}`}>
+                      入社日 <span className="text-danger">*</span>
+                    </label>
+                    <input
+                      id={`hire-${row.localId}`}
+                      type="date"
+                      className={`form-control form-control-sm${!row.hireDate && row.selected && !row.registered ? ' is-invalid' : ''}`}
+                      value={row.hireDate}
+                      disabled={disabled}
+                      onChange={(e) =>
+                        updateRow(row.localId, {
+                          hireDate: e.target.value,
+                          registerError: '',
+                        })
+                      }
+                    />
+                  </div>
                 </div>
               )}
+
+              {!isFormatError && (row.registerError || row.codeError) ? (
+                <div className="resume-import-card-error">
+                  {row.registerError || row.codeError}
+                </div>
+              ) : null}
             </article>
           );
         })}
@@ -735,7 +748,9 @@ export default function ResumeImportConfirmPage() {
       <div className="d-flex flex-wrap gap-2 justify-content-between align-items-center mt-3 mb-4">
         <div className="text-muted small">
           登録対象 {selectedCount} / {rows.length} 件
-          （キャンセルしてもデータベースには保存されません）
+          {rows.some((r) => r.errorKind === 'format' || r.parseError)
+            ? '（ファイル要修正は登録対象外です）'
+            : null}
         </div>
         <div className="d-flex flex-wrap gap-2">
           <button type="button" className="btn btn-outline-secondary app-btn" onClick={handleCancel} disabled={registering}>

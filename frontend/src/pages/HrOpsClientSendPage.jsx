@@ -18,7 +18,7 @@ import {
   buildPayrollMailBody,
   buildPayrollMailSubject,
 } from '../utils/payrollMailTemplate';
-import { excludeParentDepartments, filterEmployeesByDepartmentScope } from '../utils';
+import { filterEmployeesByDepartmentScope } from '../utils';
 
 const BUSINESS_TYPE = findHrOpsBusinessType('client-send');
 
@@ -494,7 +494,7 @@ export default function HrOpsClientSendPage() {
   });
 
   const visibleDepartments = useMemo(
-    () => excludeParentDepartments(filterDepartmentsByScope(master?.departments ?? [], user)),
+    () => filterDepartmentsByScope(master?.departments ?? [], user),
     [master, user]
   );
 

@@ -4,7 +4,6 @@ import jp.dispatch.employee.audit.AuditAction;
 import jp.dispatch.employee.auth.SecurityService;
 import jp.dispatch.employee.dto.ClientSaveRequest;
 import jp.dispatch.employee.dto.DepartmentDto;
-import jp.dispatch.employee.dto.DepartmentFilter;
 import jp.dispatch.employee.dto.EmployeeDetailDto.CareerDto;
 import jp.dispatch.employee.dto.EmployeeDetailDto.PersonalDto;
 import jp.dispatch.employee.dto.EmployeeDetailDto.QualificationDto;
@@ -501,10 +500,12 @@ public class MasterImportService {
             departmentId = lookup.departments.get(departmentName);
         }
         if (!isBlank(departmentName) && departmentId == null) {
-            String message = lookup.parentDepartments.contains(departmentName)
-                    ? "事業部ではなく配下の部門を指定してください"
-                    : "部門マスタに「" + departmentName + "」がありません";
-            errors.add(error(row, "所属部門", message));
+            errors.add(error(row, "所属部門", "部門マスタに「" + departmentName + "」がありません"));
+        } else if (!isBlank(departmentName) && affiliationCompany != null
+                && jp.dispatch.employee.model.AffiliationCompanies.isBitcross(affiliationCompany)
+                && jp.dispatch.employee.model.EmployeeCodeRules.isDevDepartmentWithoutDivision(departmentName)) {
+            errors.add(error(row, "所属部門",
+                    "ビットクロスの開発系部門は事業部を含めて指定してください（例：事業一部・開発一部）"));
         } else if (!isBlank(employeeType) && !isBlank(departmentName) && affiliationCompany != null
                 && !jp.dispatch.employee.model.EmployeeCodeRules.isDepartmentAllowedForType(
                         employeeType, departmentName, affiliationCompany)) {
@@ -623,7 +624,8 @@ public class MasterImportService {
                 null,
                 blankToNull(text(row, "開発技術")),
                 blankToNull(text(row, "業務知識")),
-                blankToNull(text(row, "自己PR"))
+                blankToNull(text(row, "自己PR")),
+                blankToNull(text(row, "備考"))
         );
 
         return new EmployeeSaveRequest(
@@ -716,19 +718,12 @@ public class MasterImportService {
 
     private Lookup buildLookup() {
         List<DepartmentDto> allDepartments = employeeRepository.findAllDepartments();
-        List<DepartmentDto> assignable = DepartmentFilter.excludeParentDepartments(allDepartments);
+        // ビットクロスの事業部単体所属を許可するため、親部門もルックアップ対象に含める
         Map<String, Long> departments = new LinkedHashMap<>();
-        for (DepartmentDto department : assignable) {
+        for (DepartmentDto department : allDepartments) {
             String company = jp.dispatch.employee.model.AffiliationCompanies.normalize(department.company());
             departments.put(company + "\0" + department.name(), department.id());
             departments.putIfAbsent(department.name(), department.id());
-        }
-        Set<String> parentDepartments = new HashSet<>();
-        Set<Long> assignableIds = new HashSet<>(departments.values());
-        for (DepartmentDto department : allDepartments) {
-            if (!assignableIds.contains(department.id())) {
-                parentDepartments.add(department.name());
-            }
         }
         Map<String, NationalityDto> nationalities = new LinkedHashMap<>();
         for (NationalityDto nationality : employeeRepository.findAllNationalities()) {
@@ -738,7 +733,7 @@ public class MasterImportService {
         for (ResidenceStatusDto status : employeeRepository.findAllResidenceStatuses()) {
             residences.put(status.name(), status);
         }
-        return new Lookup(departments, parentDepartments, nationalities, residences);
+        return new Lookup(departments, nationalities, residences);
     }
 
     private void requireAdmin() {
@@ -916,7 +911,6 @@ public class MasterImportService {
 
     private record Lookup(
             Map<String, Long> departments,
-            Set<String> parentDepartments,
             Map<String, NationalityDto> nationalities,
             Map<String, ResidenceStatusDto> residences
     ) {

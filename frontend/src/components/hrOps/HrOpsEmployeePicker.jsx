@@ -7,7 +7,7 @@ import {
 } from '../../auth';
 import { useAuth } from '../../context/AuthContext';
 import { useAppMessage } from '../../context/MessageContext';
-import { excludeParentDepartments, filterEmployeesByDepartmentScope } from '../../utils';
+import { filterEmployeesByDepartmentScope } from '../../utils';
 
 export default function HrOpsEmployeePicker({ value, onChange, disabled = false }) {
   const { user } = useAuth();
@@ -18,7 +18,7 @@ export default function HrOpsEmployeePicker({ value, onChange, disabled = false 
   const [loading, setLoading] = useState(true);
 
   const visibleDepartments = useMemo(
-    () => excludeParentDepartments(filterDepartmentsByScope(master?.departments ?? [], user)),
+    () => filterDepartmentsByScope(master?.departments ?? [], user),
     [master, user]
   );
 

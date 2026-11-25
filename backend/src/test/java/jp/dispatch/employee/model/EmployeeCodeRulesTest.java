@@ -52,6 +52,19 @@ class EmployeeCodeRulesTest {
     }
 
     @Test
+    void acceptsDeptForFreelancerOnBitcross() {
+        assertTrue(EmployeeCodeRules.isDepartmentAllowedForType(
+                "個人事業主", "営業部", AffiliationCompanies.BITCROSS));
+        assertTrue(EmployeeCodeRules.isDepartmentAllowedForType(
+                "個人事業主", "事業一部・開発一部", AffiliationCompanies.BITCROSS));
+        assertFalse(EmployeeCodeRules.isDepartmentAllowedForType(
+                "個人事業主", "その他", AffiliationCompanies.BITCROSS));
+        assertNull(EmployeeCodeRules.validate(
+                "btcP00001", "個人事業主", "事業二部・開発二部", AffiliationCompanies.BITCROSS));
+        assertTrue(EmployeeCodeRules.canChangeDepartment("個人事業主"));
+    }
+
+    @Test
     void detectsCrossCompanyTransfer() {
         assertTrue(EmployeeCodeRules.isCrossCompanyTransfer(
                 AffiliationCompanies.BITCROSS, AffiliationCompanies.ALESIS));

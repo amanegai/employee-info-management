@@ -19,6 +19,7 @@ import jp.dispatch.employee.repository.FileAttachmentRepository;
 import jp.dispatch.employee.repository.RelatedDataCleanupRepository;
 import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
 import org.springframework.web.server.ResponseStatusException;
 
 import java.time.LocalDate;
@@ -125,9 +126,8 @@ public class EmployeeService {
         List<DepartmentDto> allDepartments = repository.findAllDepartments();
         return new MasterDto(
                 dataScopeService.visibleDepartments(allDepartments),
-                DepartmentFilter.excludeParentDepartments(
-                        dataScopeService.assignableDepartments(allDepartments)
-                ),
+                // ビットクロスは事業部単体所属を許可するため、親部門も選択可
+                dataScopeService.assignableDepartments(allDepartments),
                 AffiliationCompanies.ALL,
                 MasterData.POSITIONS,
                 MasterData.ASSIGNMENT_ROLES,
@@ -331,13 +331,55 @@ public class EmployeeService {
         auditLogService.log(AuditAction.EMPLOYEE_DELETE, "employee", String.valueOf(id), existing.name());
     }
 
+    @Transactional
     public EmployeeDto create(EmployeeSaveRequest request) {
         return insertEmployee(request, true);
     }
 
     /** マスタ一括登録：件ごとの監査は記録しない */
+    @Transactional
     public EmployeeDto createFromMaster(EmployeeSaveRequest request) {
         return insertEmployee(request, false);
+    }
+
+    /**
+     * 履歴書インポート：社員ID・社員種別・所属部門は事前必須。
+     * 稼働状況が空の場合は待機中を既定とする。
+     */
+    @Transactional
+    public EmployeeDto createFromImport(EmployeeSaveRequest request) {
+        requireWritePermission();
+        String workStatus = request.workStatus();
+        if (workStatus == null || workStatus.isBlank()) {
+            workStatus = "待機中";
+        }
+        EmployeeSaveRequest normalized = new EmployeeSaveRequest(
+                request.employeeCode(),
+                request.name(),
+                request.departmentId(),
+                request.affiliationCompany(),
+                request.position(),
+                request.assignmentRole(),
+                request.employeeType(),
+                workStatus,
+                request.unitPrice(),
+                request.evaluation(),
+                request.endDate(),
+                request.personal(),
+                request.skills(),
+                request.technicalSkills(),
+                request.qualifications(),
+                request.careers(),
+                request.attendance(),
+                request.evaluationHistory(),
+                request.memo(),
+                request.evaluationItems(),
+                request.overallEvaluation(),
+                request.salary(),
+                request.hr(),
+                request.version()
+        );
+        return insertEmployee(normalized, true);
     }
 
     private EmployeeDto insertEmployee(EmployeeSaveRequest request, boolean writeAudit) {
@@ -457,45 +499,6 @@ public class EmployeeService {
                 source.emergencyContactRelation(),
                 source.paidLeaveStartDate()
         );
-    }
-
-    /**
-     * 履歴書インポート：社員ID・社員種別・所属部門は事前必須。
-     * 稼働状況が空の場合は待機中を既定とする。
-     */
-    public EmployeeDto createFromImport(EmployeeSaveRequest request) {
-        requireWritePermission();
-        String workStatus = request.workStatus();
-        if (workStatus == null || workStatus.isBlank()) {
-            workStatus = "待機中";
-        }
-        EmployeeSaveRequest normalized = new EmployeeSaveRequest(
-                request.employeeCode(),
-                request.name(),
-                request.departmentId(),
-                request.affiliationCompany(),
-                request.position(),
-                request.assignmentRole(),
-                request.employeeType(),
-                workStatus,
-                request.unitPrice(),
-                request.evaluation(),
-                request.endDate(),
-                request.personal(),
-                request.skills(),
-                request.technicalSkills(),
-                request.qualifications(),
-                request.careers(),
-                request.attendance(),
-                request.evaluationHistory(),
-                request.memo(),
-                request.evaluationItems(),
-                request.overallEvaluation(),
-                request.salary(),
-                request.hr(),
-                request.version()
-        );
-        return insertEmployee(normalized, true);
     }
 
     /** 社員IDが既に登録済みか */
@@ -635,7 +638,7 @@ public class EmployeeService {
             assignmentRole = request.assignmentRole();
             position = request.position();
         } else if (canChangeDeptRole) {
-            // 個人事業主/BP：部門変更不可、役職・役割のみ変更可
+            // BP 等：部門変更不可、役職・役割のみ変更可
             assignmentRole = request.assignmentRole();
             position = request.position();
         }
@@ -673,6 +676,7 @@ public class EmployeeService {
         String company = AffiliationCompanies.normalize(req.affiliationCompany());
         ensureDepartmentMatchesCompany(req.departmentId(), company);
         String departmentName = resolveDepartmentName(req.departmentId());
+        ensureBitcrossDepartmentStyle(company, departmentName);
         String codeError = EmployeeCodeRules.validate(
                 req.employeeCode(), req.employeeType(), departmentName, company
         );
@@ -692,6 +696,7 @@ public class EmployeeService {
         if (EmployeeCodeRules.isCrossCompanyTransfer(existing.affiliationCompany(), company)) {
             throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "所属会社は変更できません");
         }
+        ensureBitcrossDepartmentStyle(company, newDeptName);
         if (!EmployeeCodeRules.isDepartmentAllowedForType(req.employeeType(), newDeptName, company)) {
             throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "社員種別と所属部門の組み合わせが不正です");
         }
@@ -705,6 +710,16 @@ public class EmployeeService {
             }
         }
         assertNoIdentityDuplicate(req.name(), personal, existing.id());
+    }
+
+    private void ensureBitcrossDepartmentStyle(String affiliationCompany, String departmentName) {
+        if (AffiliationCompanies.isBitcross(affiliationCompany)
+                && EmployeeCodeRules.isDevDepartmentWithoutDivision(departmentName)) {
+            throw new ResponseStatusException(
+                    HttpStatus.BAD_REQUEST,
+                    "ビットクロスの開発系部門は事業部を含めて指定してください（例：事業一部・開発一部）"
+            );
+        }
     }
 
     private void ensureDepartmentMatchesCompany(Long departmentId, String affiliationCompany) {

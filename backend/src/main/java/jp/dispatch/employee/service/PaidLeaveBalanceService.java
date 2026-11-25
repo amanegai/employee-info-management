@@ -20,7 +20,8 @@ import java.util.List;
 import java.util.Optional;
 
 /**
- * 有給残台帳。対象は正社員のみ。稼働状況が「退職」の場合は台帳を保持しない（退職予定は保持）。
+ * 有給残台帳。対象は正社員・契約社員。個人事業主・BP は対象外。
+ * 稼働状況が「退職」の場合は台帳を保持しない（退職予定は保持）。
  * 上線時は前年度=0・今年度=基準日到達分の付与日数。
  * 新付与到来時は旧前年度を消滅（付与から2年）、今年度残を前年度へ繰越し、今年度に新付与を載せる。
  * 日次／参照時にも付与日から2年経過分を消滅する。
@@ -37,8 +38,14 @@ public class PaidLeaveBalanceService {
         this.repository = repository;
     }
 
+    /** 労働基準法に基づき正社員・契約社員を有給対象とする（個人事業主・BP は対象外） */
     public static boolean isEligibleEmployeeType(String employeeType) {
-        return EmployeeCodeRules.TYPE_SEISHAIN.equals(employeeType);
+        if (employeeType == null || employeeType.isBlank()) {
+            return false;
+        }
+        String type = employeeType.trim();
+        return EmployeeCodeRules.TYPE_SEISHAIN.equals(type)
+                || EmployeeCodeRules.TYPE_KEIYAKU.equals(type);
     }
 
     /** 退職済みは有給台帳対象外。退職予定は対象。 */
@@ -46,7 +53,7 @@ public class PaidLeaveBalanceService {
         return PaidLeaveBalanceRepository.RESIGNED_WORK_STATUS.equals(workStatus);
     }
 
-    /** MyPage 等：残高を取得。非対象（非正社員・退職）は台帳削除のうえ empty。 */
+    /** MyPage 等：残高を取得。非対象（個人事業主等・退職）は台帳削除のうえ empty。 */
     @Transactional
     public Optional<PaidLeaveBalanceDto> ensureBalance(long employeeId) {
         return ensureBalance(employeeId, LocalDate.now(ZONE));
@@ -196,7 +203,7 @@ public class PaidLeaveBalanceService {
         for (Long employeeId : ineligible) {
             repository.deleteByEmployeeId(employeeId);
         }
-        log.info("有給対象外（非正社員または退職）の台帳を削除しました: {} 件", ineligible.size());
+        log.info("有給対象外（正社員・契約社員以外または退職）の台帳を削除しました: {} 件", ineligible.size());
     }
 
     private Optional<PaidLeaveBalanceDto> persistIfChanged(

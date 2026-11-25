@@ -1812,6 +1812,12 @@ body.page-guide-is-open {
   line-height: 1.45;
 }
 
+.detail-info-value.is-multiline {
+  white-space: pre-line;
+  font-weight: 500;
+  line-height: 1.6;
+}
+
 .detail-info-value.is-empty {
   color: #64748b;
   font-weight: 500;
@@ -1971,6 +1977,7 @@ body.page-guide-is-open {
 
 .detail-qual-list li {
   margin-bottom: 0.35rem;
+  white-space: pre-line;
 }
 
 .attendance-panel {
@@ -6382,6 +6389,18 @@ body.page-guide-is-open {
   color: #475569;
   background: #f8fafc;
   border-color: #e2e8f0;
+}
+
+.user-mgmt-role-contract {
+  background: #ecfeff;
+  color: #0e7490;
+  border-color: #a5f3fc;
+}
+
+.user-mgmt-role-freelancer {
+  background: #f5f3ff;
+  color: #6d28d9;
+  border-color: #ddd6fe;
 }
 
 .user-mgmt-role-employee {
@@ -20184,7 +20203,7 @@ body.page-guide-is-open {
 
 .resume-import-batch-grid {
   display: grid;
-  grid-template-columns: repeat(6, minmax(0, 1fr));
+  grid-template-columns: repeat(5, minmax(0, 1fr));
   gap: 0.75rem 0.85rem;
   align-items: end;
 }
@@ -20299,15 +20318,18 @@ body.page-guide-is-open {
   border-color: #bbf7d0;
 }
 
+/* ???? ? ???? ? ???? ? ??ID ? ????1?? */
 .resume-import-card-body {
   display: grid;
-  grid-template-columns: repeat(3, minmax(0, 1fr));
+  grid-template-columns: repeat(5, minmax(0, 1fr));
   gap: 0.75rem 0.85rem;
   padding: 0.9rem 1rem 1rem;
+  align-items: start;
 }
 
 .resume-import-field--code {
-  grid-column: span 2;
+  grid-column: auto;
+  min-width: 0;
 }
 
 .resume-import-card-error {
@@ -20316,13 +20338,25 @@ body.page-guide-is-open {
   color: #b91c1c;
 }
 
+.resume-import-card.is-format-error {
+  border-color: #f59e0b;
+  background: #fffbeb;
+}
+
+.resume-import-card-format-hint {
+  padding: 0.75rem 1rem 1rem;
+  color: #92400e;
+  border-top: 1px solid #fde68a;
+  background: #fffbeb;
+}
+
 @media (max-width: 1199.98px) {
   .resume-import-batch-grid {
     grid-template-columns: repeat(3, minmax(0, 1fr));
   }
 
   .resume-import-card-body {
-    grid-template-columns: repeat(2, minmax(0, 1fr));
+    grid-template-columns: repeat(3, minmax(0, 1fr));
   }
 
   .resume-import-field--code {

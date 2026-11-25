@@ -315,14 +315,12 @@ function buildSpecialtySection(p) {
     </table>`;
 }
 
-function buildCareerRows(careers) {
+function buildCareerRows(careers, remarksText = '') {
   const colCount = careerColumnCount();
-  if (!careers?.length) {
-    return `<tr><td colspan="${colCount}" class="center empty"> </td></tr>`;
-  }
-  const rows = careers
-    .map(
-      (c, i) => `
+  const rows = careers?.length
+    ? careers
+        .map(
+          (c, i) => `
       <tr class="career-data-row">
         <td class="center">${i + 1}</td>
         <td class="center career-date">${careerStart(c)}</td>
@@ -337,18 +335,19 @@ function buildCareerRows(careers) {
         <td class="career-small">${nl2br(c.fwTools)}</td>
         ${CAREER_PHASE_OPTIONS.map((ph) => `<td class="center phase-mark">${phaseMark(c, ph)}</td>`).join('')}
       </tr>`
-    )
-    .join('');
+        )
+        .join('')
+    : `<tr><td colspan="${colCount}" class="center empty"> </td></tr>`;
   // 備考は tfoot にしない（印刷時に毎ページ繰り返されるため）
   const remarks = `
       <tr class="career-remarks-row">
         <td class="label">備考</td>
-        <td colspan="${colCount - 1}"></td>
+        <td colspan="${colCount - 1}" class="value">${nl2br(remarksText)}</td>
       </tr>`;
   return rows + remarks;
 }
 
-function buildCareerSection(careers) {
+function buildCareerSection(careers, remarksText = '') {
   return `
     <p class="role-note">＜役割＞PM：ﾏﾈｰｼﾞｬｰ、PL：ﾘｰﾀﾞｰ、SL：ｻﾌﾞﾘｰﾀﾞｰ、SE：ｼｽﾃﾑｴﾝｼﾞﾆｱ、BSE：ﾌﾞﾘｯｼﾞSE、PG：ﾌﾟﾛｸﾞﾗﾏ</p>
     <table class="sheet career-table">
@@ -385,7 +384,7 @@ function buildCareerSection(careers) {
           <th>月</th>
         </tr>
       </thead>
-      <tbody>${buildCareerRows(careers)}</tbody>
+      <tbody>${buildCareerRows(careers, remarksText)}</tbody>
     </table>`;
 }
 
@@ -808,7 +807,7 @@ function buildResumeHtml(employee, { embedded = false } = {}) {
 
     ${buildSpecialtySection(p)}
 
-    ${buildCareerSection(sortCareersByNewestFirst(employee.careers))}
+    ${buildCareerSection(sortCareersByNewestFirst(employee.careers), p.remarks)}
   </article>
 </body>
 </html>`;

@@ -7,7 +7,7 @@ import {
 } from '../../auth';
 import { useAuth } from '../../context/AuthContext';
 import { useAppMessage } from '../../context/MessageContext';
-import { excludeParentDepartments, filterEmployeesByDepartmentScope, workStatusClass } from '../../utils';
+import { filterEmployeesByDepartmentScope, workStatusClass } from '../../utils';
 
 function employeeInitial(name) {
   const trimmed = String(name ?? '').trim();
@@ -24,7 +24,7 @@ export default function HrOpsPayrollEmployeePicker({ value, onChange, disabled =
   const [query, setQuery] = useState('');
 
   const visibleDepartments = useMemo(
-    () => excludeParentDepartments(filterDepartmentsByScope(master?.departments ?? [], user)),
+    () => filterDepartmentsByScope(master?.departments ?? [], user),
     [master, user]
   );
 

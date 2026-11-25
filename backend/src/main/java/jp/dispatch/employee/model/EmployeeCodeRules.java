@@ -39,8 +39,9 @@ public final class EmployeeCodeRules {
             AffiliationCompanies.SHUWA, PREFIX_SWT
     );
 
-    private static final Set<String> FIXED_DEPT_TYPES = Set.of(TYPE_KOJIN, TYPE_BP);
-    private static final Set<String> CAN_CHANGE_DEPT_TYPES = Set.of(TYPE_SEISHAIN, TYPE_KEIYAKU);
+    /** BP のみ所属部門を「その他」に固定。個人事業主は正社員同様に部門帰属可 */
+    private static final Set<String> FIXED_DEPT_TYPES = Set.of(TYPE_BP);
+    private static final Set<String> CAN_CHANGE_DEPT_TYPES = Set.of(TYPE_SEISHAIN, TYPE_KEIYAKU, TYPE_KOJIN);
     private static final Set<String> ALS_SWT_DEPTS = Set.of(DEPT_KAIHATSU, DEPT_EIGYO);
 
     private static final Pattern CODE_PATTERN = Pattern.compile("^(btc|als|swt)([SKPB])(\\d{5})$");
@@ -63,6 +64,18 @@ public final class EmployeeCodeRules {
 
     public static boolean isSonotaDepartment(String departmentName) {
         return DEPT_SONOTA.equals(departmentName);
+    }
+
+    /**
+     * ビットクロスの開発系部門名に「事業」が含まれない（＝事業部なしの開発部のみ）かどうか。
+     * 例：{@code 開発部} → true、{@code 事業一部・開発一部} → false、{@code 事業一部} → false
+     */
+    public static boolean isDevDepartmentWithoutDivision(String departmentName) {
+        if (departmentName == null || departmentName.isBlank()) {
+            return false;
+        }
+        String name = departmentName.trim();
+        return name.contains("開発") && !name.contains("事業");
     }
 
     public static String requiredPrefix(String affiliationCompany) {
@@ -108,7 +121,7 @@ public final class EmployeeCodeRules {
         if (isFixedDepartmentType(type)) {
             return isSonotaDepartment(dept);
         }
-        if (TYPE_SEISHAIN.equals(type) || TYPE_KEIYAKU.equals(type)) {
+        if (TYPE_SEISHAIN.equals(type) || TYPE_KEIYAKU.equals(type) || TYPE_KOJIN.equals(type)) {
             return !isSonotaDepartment(dept);
         }
         return false;
@@ -171,12 +184,15 @@ public final class EmployeeCodeRules {
 
         if (!isDepartmentAllowedForType(employeeType, departmentName, affiliation)) {
             if (AffiliationCompanies.isBitcross(affiliation) && isFixedDepartmentType(employeeType)) {
-                return "個人事業主・BP の所属部門は「その他」のみ選択できます";
+                return "BP の所属部門は「その他」のみ選択できます";
             }
             if (!AffiliationCompanies.isBitcross(affiliation)) {
                 return "アレシス・衆和テクノロジーの所属部門は「開発部」「営業部」のみです";
             }
-            return "正社員・契約社員の所属部門に「その他」は選択できません";
+            return "正社員・契約社員・個人事業主の所属部門に「その他」は選択できません";
+        }
+        if (AffiliationCompanies.isBitcross(affiliation) && isDevDepartmentWithoutDivision(departmentName)) {
+            return "ビットクロスの開発系部門は事業部を含めて指定してください（例：事業一部・開発一部）";
         }
         return null;
     }

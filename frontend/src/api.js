@@ -59,9 +59,12 @@ async function request(path, options = {}) {
     let message = res.statusText;
     try {
       const body = await res.json();
-      message = body.detail || body.message || body.title || message;
+      message = body.detail || body.message || body.title || body.error || message;
     } catch {
       /* ignore */
+    }
+    if (!message || message === 'Bad Request' || message === 'Internal Server Error') {
+      message = `リクエストに失敗しました（HTTP ${res.status}）`;
     }
     throw new ApiError(message, res.status);
   }
