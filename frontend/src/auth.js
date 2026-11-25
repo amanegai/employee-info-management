@@ -189,12 +189,21 @@ export const USER_ROLE_OPTIONS = [
   { value: 'ADMIN', label: '管理者' },
   { value: 'HR', label: '人事' },
   { value: 'EMPLOYEE', label: '一般社員' },
+  { value: 'CONTRACT', label: '契約社員' },
+  { value: 'FREELANCER', label: '個人事業主' },
   { value: 'DIVISION_HEAD', label: '事業部長' },
   { value: 'DEPT_HEAD', label: '部長' },
   { value: 'SALES_HEAD', label: '営業' },
 ];
 
-/** 兼職に選べるロール（管理者・一般社員・人事は不可） */
+/** MyPage 専用ロール（業務メニューなし） */
+export const MYPAGE_ONLY_ROLE_VALUES = ['EMPLOYEE', 'CONTRACT', 'FREELANCER'];
+
+export function isMyPageOnlyRole(role) {
+  return MYPAGE_ONLY_ROLE_VALUES.includes(role);
+}
+
+/** 兼職に選べるロール（管理者・MyPage専用・人事は不可） */
 export const SIDE_ASSIGNMENT_ROLE_VALUES = ['DIVISION_HEAD', 'DEPT_HEAD', 'SALES_HEAD'];
 
 export const SIDE_ASSIGNMENT_ROLE_OPTIONS = USER_ROLE_OPTIONS.filter((o) =>
@@ -203,7 +212,7 @@ export const SIDE_ASSIGNMENT_ROLE_OPTIONS = USER_ROLE_OPTIONS.filter((o) =>
 
 /** 本職がこれらのロールのとき兼職を追加できない */
 export function primaryRoleDisallowsSideAssignments(role) {
-  return role === 'ADMIN' || role === 'EMPLOYEE';
+  return role === 'ADMIN' || isMyPageOnlyRole(role);
 }
 
 export function isSideAssignmentRoleAllowed(role) {
@@ -290,6 +299,10 @@ export function roleLabel(role) {
       return '人事';
     case 'EMPLOYEE':
       return '一般社員';
+    case 'CONTRACT':
+      return '契約社員';
+    case 'FREELANCER':
+      return '個人事業主';
     case 'USER':
       return '一般';
     case 'DIVISION_HEAD':
@@ -311,6 +324,10 @@ export function roleIcon(role) {
       return 'bi-person-vcard-fill';
     case 'EMPLOYEE':
       return 'bi-person-badge';
+    case 'CONTRACT':
+      return 'bi-person-vcard';
+    case 'FREELANCER':
+      return 'bi-person-workspace';
     case 'USER':
       return 'bi-person-fill';
     case 'DIVISION_HEAD':
@@ -332,6 +349,10 @@ export function roleBadgeClass(role) {
       return 'user-mgmt-role-hr';
     case 'EMPLOYEE':
       return 'user-mgmt-role-employee';
+    case 'CONTRACT':
+      return 'user-mgmt-role-contract';
+    case 'FREELANCER':
+      return 'user-mgmt-role-freelancer';
     case 'USER':
       return 'user-mgmt-role-user';
     case 'DIVISION_HEAD':

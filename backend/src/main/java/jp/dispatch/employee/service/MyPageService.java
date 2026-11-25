@@ -90,6 +90,7 @@ public class MyPageService {
                     null,
                     null,
                     null,
+                    null,
                     adminOverview
             );
         }
@@ -101,7 +102,10 @@ public class MyPageService {
                 ));
         EmployeeDetailDto detail = employeeDetailRepository.findDetail(employeeId).orElse(null);
         PersonalDto personal = detail != null ? detail.personal() : null;
-        PaidLeaveBalanceDto paidLeave = paidLeaveBalanceService.ensureBalance(employeeId).orElse(null);
+        boolean paidLeaveEligible = PaidLeaveBalanceService.isEligibleEmployeeType(employee.employeeType());
+        PaidLeaveBalanceDto paidLeave = paidLeaveEligible
+                ? paidLeaveBalanceService.ensureBalance(employeeId).orElse(null)
+                : null;
         Integer currentYear = paidLeave != null ? paidLeave.currentYearRemaining() : null;
         Integer previousYear = paidLeave != null ? paidLeave.previousYearRemaining() : null;
         Integer paidLeaveRemaining = paidLeave != null ? paidLeave.totalRemaining() : null;
@@ -126,6 +130,7 @@ public class MyPageService {
                 personal != null ? personal.email() : null,
                 personal != null ? personal.phone() : null,
                 personal != null ? personal.nearestStation() : null,
+                paidLeaveEligible,
                 currentYear,
                 previousYear,
                 paidLeaveRemaining,

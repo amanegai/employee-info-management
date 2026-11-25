@@ -245,12 +245,16 @@ function PersonalSection({ data, defaultOpen = true }) {
                       <div className="col-md-4">
                         <InfoCell
                           label="有給残（今年度）"
-                          labelAction={paidLeaveHelpButton}
+                          labelAction={
+                            data.paidLeaveEligible === false ? null : paidLeaveHelpButton
+                          }
                           value={
-                            data.paidLeaveCurrentYearRemaining != null
-                              && data.paidLeaveCurrentYearRemaining !== ''
-                              ? `${data.paidLeaveCurrentYearRemaining}日`
-                              : ''
+                            data.paidLeaveEligible === false
+                              ? '対象外'
+                              : data.paidLeaveCurrentYearRemaining != null
+                                  && data.paidLeaveCurrentYearRemaining !== ''
+                                ? `${data.paidLeaveCurrentYearRemaining}日`
+                                : ''
                           }
                         />
                       </div>
@@ -258,10 +262,12 @@ function PersonalSection({ data, defaultOpen = true }) {
                         <InfoCell
                           label="有給残（前年度）"
                           value={
-                            data.paidLeavePreviousYearRemaining != null
-                              && data.paidLeavePreviousYearRemaining !== ''
-                              ? `${data.paidLeavePreviousYearRemaining}日`
-                              : ''
+                            data.paidLeaveEligible === false
+                              ? '対象外'
+                              : data.paidLeavePreviousYearRemaining != null
+                                  && data.paidLeavePreviousYearRemaining !== ''
+                                ? `${data.paidLeavePreviousYearRemaining}日`
+                                : ''
                           }
                         />
                       </div>

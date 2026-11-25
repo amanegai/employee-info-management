@@ -81,7 +81,9 @@ public record EmployeeDetailDto(
             String technicalLevel,
             String specialtyDev,
             String specialtyBusiness,
-            String selfPr
+            String selfPr,
+            /** 履歴書の備考（自由記述） */
+            String remarks
     ) {
     }
 

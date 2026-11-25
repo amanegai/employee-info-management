@@ -137,7 +137,8 @@ public class DataScopeService {
         }
         LinkedHashSet<String> companies = new LinkedHashSet<>();
         for (UserAssignment assignment : assignments) {
-            if (AuthRoles.ADMIN.equals(assignment.role()) || AuthRoles.EMPLOYEE.equals(assignment.role())) {
+            if (AuthRoles.ADMIN.equals(assignment.role())
+                    || AuthRoles.isMyPageOnlyRole(assignment.role())) {
                 continue;
             }
             String company = normalizeRequiredCompany(assignment.affiliationCompany());

@@ -8,11 +8,16 @@ import EmployeeTable from '../components/EmployeeTable';
 import {
   SUMMARY_FILTER_LABELS,
   exportEmployeesToCsv,
-  excludeParentDepartments,
   filterBySummary,
   filterEmployeesByDepartmentScope,
+  formToSavePayload,
 } from '../utils';
-import { parseResumeXlsxToForm } from '../utils/resumeImport';
+import { isResumeFormatErrorMessage, parseResumeXlsxToForm } from '../utils/resumeImport';
+import { parseResumeFilename, resolveDepartmentIdByName } from '../utils/resumeFilename';
+import {
+  AFFILIATION_COMPANY_BITCROSS,
+  validateEmployeeCode,
+} from '../utils/employeeCode';
 import {
   clearEmployeeImportBatch,
   clearEmployeeImportPrefill,
@@ -102,8 +107,9 @@ export default function EmployeeListPage() {
     }
   }, [showMessage]);
 
+  // ビットクロスの事業部単体所属に対応するため、親部門も検索対象に含める
   const visibleDepartments = useMemo(
-    () => excludeParentDepartments(filterDepartmentsByScope(master?.departments ?? [], user)),
+    () => filterDepartmentsByScope(master?.departments ?? [], user),
     [master, user]
   );
 
@@ -273,42 +279,212 @@ export default function EmployeeListPage() {
 
     try {
       const nationalities = master?.nationalities ?? masterRef.current?.nationalities ?? [];
-      const items = [];
+      const departments = filterDepartmentsByScope(
+        master?.departments ?? masterRef.current?.departments ?? [],
+        user
+      );
+      const confirmItems = [];
+      const successes = [];
 
       for (const file of files) {
+        const localId = newLocalId();
+        let form;
         try {
-          const form = await parseResumeXlsxToForm(file, nationalities);
-          items.push({
-            localId: newLocalId(),
-            fileName: file.name,
-            form: {
-              ...form,
-              workStatus: form.workStatus || '待機中',
-              employeeType: form.employeeType || '',
-            },
-          });
+          form = await parseResumeXlsxToForm(file, nationalities);
         } catch (e) {
-          items.push({
-            localId: newLocalId(),
+          const raw = e.message || '解析に失敗しました';
+          const parseError = isResumeFormatErrorMessage(raw)
+            ? raw
+            : `ファイル形式に問題があります。${raw} 技術者履歴書の標準テンプレートを確認してください`;
+          confirmItems.push({
+            localId,
             fileName: file.name,
-            parseError: e.message || '解析に失敗しました',
+            parseError,
+            errorKind: 'format',
+          });
+          continue;
+        }
+
+        const meta = parseResumeFilename(file.name);
+        const departmentId = meta.complete
+          ? resolveDepartmentIdByName(departments, meta.departmentName, meta.affiliationCompany)
+          : null;
+        const deptName =
+          departments.find((d) => String(d.id) === String(departmentId))?.name || meta.departmentName;
+        const codeFormatError =
+          meta.complete && departmentId != null
+            ? validateEmployeeCode(
+                meta.employeeCode,
+                meta.employeeType,
+                deptName,
+                meta.affiliationCompany
+              )
+            : 'incomplete';
+
+        let codeTaken = true;
+        if (!codeFormatError && meta.employeeCode) {
+          try {
+            const result = await api.employeeCodeExists(meta.employeeCode);
+            codeTaken = Boolean(result?.exists);
+          } catch {
+            codeTaken = true;
+          }
+        }
+
+        const prefill = {
+          localId,
+          fileName: file.name,
+          form: {
+            ...form,
+            workStatus: form.workStatus || '待機中',
+            employeeType: meta.employeeType || form.employeeType || '',
+            affiliationCompany: meta.affiliationCompany || form.affiliationCompany || '',
+            departmentId: departmentId != null ? String(departmentId) : '',
+          },
+          employeeCode: meta.employeeCode || '',
+          affiliationCompany: meta.affiliationCompany || AFFILIATION_COMPANY_BITCROSS,
+          employeeType: meta.employeeType || '',
+          departmentId: departmentId != null ? String(departmentId) : '',
+          hireDate: meta.hireDate || '',
+        };
+
+        if (!codeFormatError && !codeTaken) {
+          try {
+            const payload = formToSavePayload({
+              ...form,
+              employeeCode: meta.employeeCode,
+              affiliationCompany: meta.affiliationCompany,
+              employeeType: meta.employeeType,
+              departmentId,
+              position: '',
+              workStatus: form.workStatus || '待機中',
+              hr: {
+                ...(form.hr || {}),
+                hireDate: meta.hireDate || null,
+                paidLeaveStartDate: null,
+              },
+            });
+            const created = await api.createEmployeeFromImport(payload);
+            successes.push({
+              id: created.id,
+              employeeCode: created.employeeCode,
+              name: created.name,
+            });
+            continue;
+          } catch (e) {
+            // サーバー側で登録済みだが応答だけ失敗したケースを成功扱い
+            if (meta.employeeCode) {
+              try {
+                const again = await api.employeeCodeExists(meta.employeeCode);
+                if (again?.exists) {
+                  successes.push({
+                    id: null,
+                    employeeCode: meta.employeeCode,
+                    name: form.name || meta.employeeCode,
+                  });
+                  continue;
+                }
+              } catch {
+                /* fall through */
+              }
+            }
+            const failMsg = e.message || '自動登録に失敗しました。内容を確認してください。';
+            // 履歴書ファイル側の問題は中間画面では直せない → 形式/内容エラー扱い
+            if (isResumeFormatErrorMessage(failMsg)) {
+              confirmItems.push({
+                ...prefill,
+                parseError: failMsg,
+                errorKind: 'format',
+              });
+            } else {
+              confirmItems.push({
+                ...prefill,
+                registerHint: failMsg,
+                errorKind: 'correctable',
+              });
+            }
+            continue;
+          }
+        }
+
+        if (codeTaken && (!codeFormatError || codeFormatError === 'incomplete')) {
+          // ファイル名は揃っているが ID 重複 → 中間画面で修正可
+          confirmItems.push({
+            ...prefill,
+            codeError: '社員IDが既に登録されています。別の社員IDに変更してください',
+            errorKind: 'correctable',
+          });
+        } else if (codeFormatError && codeFormatError !== 'incomplete') {
+          // 社員ID規則エラー → 中間画面で修正可
+          confirmItems.push({
+            ...prefill,
+            codeError: codeFormatError,
+            errorKind: 'correctable',
+          });
+        } else {
+          // ファイル名情报不全など → 中間画面で補完
+          confirmItems.push({
+            ...prefill,
+            errorKind: 'correctable',
           });
         }
       }
 
-      if (items.length === 0) {
+      if (confirmItems.length === 0 && successes.length === 0) {
         showMessage('読み込める履歴書がありません', 'warning');
         return;
       }
 
-      stashEmployeeImportBatch(items);
-      const okCount = items.filter((i) => !i.parseError).length;
-      const ngCount = items.length - okCount;
-      showMessage(
-        ngCount > 0
-          ? `履歴書を読み込みました（成功 ${okCount} / 失敗 ${ngCount}）。内容を確認して登録してください。`
-          : `履歴書を ${okCount} 件読み込みました。内容を確認して登録してください。`
-      );
+      if (confirmItems.length === 0) {
+        navigate('/employees', {
+          replace: true,
+          state: {
+            importResult: {
+              successCount: successes.length,
+              failCount: 0,
+              successes,
+              failures: [],
+              single: successes.length === 1,
+            },
+          },
+        });
+        return;
+      }
+
+      // 自動登録失敗（サーバー）も中間画面で修正可能な扱い
+      confirmItems.forEach((item) => {
+        if (item.registerHint && !item.errorKind) {
+          item.errorKind = 'correctable';
+        }
+      });
+
+      stashEmployeeImportBatch(confirmItems);
+      const formatNg = confirmItems.filter((i) => i.parseError || i.errorKind === 'format').length;
+      const fixableNg = confirmItems.length - formatNg;
+      if (successes.length > 0 && fixableNg > 0) {
+        showMessage(
+          `${successes.length} 件を自動登録しました。残り ${fixableNg} 件は確認画面で設定してください。`
+        );
+      } else if (successes.length > 0 && formatNg > 0) {
+        showMessage(
+          `${successes.length} 件を自動登録しました。${formatNg} 件はファイルの形式・内容に問題があるため取り込めません。`,
+          'warning'
+        );
+      } else if (fixableNg === 0 && formatNg > 0) {
+        showMessage(
+          `${formatNg} 件はファイルの形式または内容に問題があります。確認画面の案内に従い Excel を修正してください。`,
+          'warning'
+        );
+      } else if (formatNg > 0) {
+        showMessage(
+          `要設定 ${fixableNg} 件 / ファイル要修正 ${formatNg} 件。確認画面で対応してください。`,
+          'warning'
+        );
+      } else {
+        showMessage(
+          `履歴書を ${confirmItems.length} 件読み込みました。不足項目を確認画面で設定してください。`
+        );
+      }
       navigate('/employees/import/confirm');
     } catch (e) {
       showMessage(`履歴書インポートに失敗しました: ${e.message}`, 'danger');

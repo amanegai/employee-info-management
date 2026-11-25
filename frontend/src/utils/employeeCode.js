@@ -55,6 +55,16 @@ export function isSonotaDepartment(name) {
   return name === DEPT_SONOTA;
 }
 
+/**
+ * ビットクロスの開発系部門名に「事業」が含まれないか。
+ * 例：開発部 → true、事業一部・開発一部 → false、事業一部 → false
+ */
+export function isDevDepartmentWithoutDivision(departmentName) {
+  const name = String(departmentName ?? '').trim();
+  if (!name) return false;
+  return name.includes('開発') && !name.includes('事業');
+}
+
 export function requiredPrefixForCompany(company) {
   return COMPANY_PREFIX[normalizeAffiliationCompany(company)] || EMPLOYEE_CODE_PREFIX_BTC;
 }
@@ -65,12 +75,13 @@ export function requiredPrefixForDepartment(departmentName) {
   return isAlesisDepartment(departmentName) ? EMPLOYEE_CODE_PREFIX_ALS : EMPLOYEE_CODE_PREFIX_BTC;
 }
 
+/** BP のみ所属部門を「その他」に固定。個人事業主は部門帰属可 */
 export function isFixedDepartmentType(employeeType) {
-  return employeeType === '個人事業主' || employeeType === 'BP';
+  return employeeType === 'BP';
 }
 
 export function canChangeEmployeeDepartment(employeeType) {
-  return employeeType === '正社員' || employeeType === '契約社員';
+  return employeeType === '正社員' || employeeType === '契約社員' || employeeType === '個人事業主';
 }
 
 export function isDepartmentAllowedForType(employeeType, departmentName, company) {
@@ -83,7 +94,11 @@ export function isDepartmentAllowedForType(employeeType, departmentName, company
   if (isFixedDepartmentType(employeeType)) {
     return isSonotaDepartment(departmentName);
   }
-  if (employeeType === '正社員' || employeeType === '契約社員') {
+  if (
+    employeeType === '正社員' ||
+    employeeType === '契約社員' ||
+    employeeType === '個人事業主'
+  ) {
     return !isSonotaDepartment(departmentName);
   }
   return false;
@@ -132,9 +147,12 @@ export function validateEmployeeCode(code, employeeType, departmentName, company
       return 'アレシス・衆和テクノロジーの所属部門は「開発部」「営業部」のみです';
     }
     if (isFixedDepartmentType(employeeType)) {
-      return '個人事業主・BP の所属部門は「その他」のみ選択できます';
+      return 'BP の所属部門は「その他」のみ選択できます';
     }
-    return '正社員・契約社員の所属部門に「その他」は選択できません';
+    return '正社員・契約社員・個人事業主の所属部門に「その他」は選択できません';
+  }
+  if (isBitcrossCompany(affiliation) && isDevDepartmentWithoutDivision(departmentName)) {
+    return 'ビットクロスの開発系部門は事業部を含めて指定してください（例：事業一部・開発一部）';
   }
   return null;
 }

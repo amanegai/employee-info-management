@@ -280,7 +280,10 @@ export function exportEmployeesToCsv(employees) {
   URL.revokeObjectURL(url);
 }
 
-/** 配下に開発部などを持つ事業部（親部門）を選択肢から除外する */
+/**
+ * 配下に開発部などを持つ事業部（親部門）を選択肢から除外する。
+ * 社員の所属選択では事業部単体を許可するため原則使わない（レガシー／特殊用途向け）。
+ */
 export function excludeParentDepartments(departments) {
   if (!departments?.length) return [];
   const parentIds = new Set(
@@ -606,6 +609,7 @@ const EMPTY_PERSONAL = {
   specialtyDev: '',
   specialtyBusiness: '',
   selfPr: '',
+  remarks: '',
 };
 
 export const EMPTY_CAREER = {
@@ -677,7 +681,44 @@ export const LANGUAGE_LEVEL_OPTIONS = ['A', 'B', 'C', 'D'];
 export const SKILL_MARK_OPTIONS = ['◎', '〇', '△'];
 export const TECHNICAL_SKILL_MARK_OPTIONS = SKILL_MARK_OPTIONS;
 export const MARITAL_STATUS_OPTIONS = ['未婚', '既婚'];
-export const EDUCATION_DEGREE_OPTIONS = ['学士', '修士', '博士', 'その他'];
+export const EDUCATION_DEGREE_OPTIONS = [
+  '大学院博士課程修了（日本）',
+  '大学院修士課程修了（日本）',
+  '大学卒業（日本）',
+  '大学院博士課程修了（海外）',
+  '大学院修士課程修了（海外）',
+  '大学卒業（海外）',
+  '短期大学卒業（日本）',
+  '専門学校卒業（日本）',
+  '高等専門学校卒業（日本）',
+  'その他',
+];
+
+/**
+ * 履歴書「資格分類」など改行／連続日付で並ぶ資格文を行単位に分割する
+ * @param {string} text
+ * @returns {string[]}
+ */
+export function splitQualificationLines(text) {
+  const raw = String(text ?? '')
+    .replace(/\r\n/g, '\n')
+    .replace(/\r/g, '\n')
+    .trim();
+  if (!raw) return [];
+
+  const byNewline = raw
+    .split(/\n+/)
+    .map((line) => line.trim())
+    .filter(Boolean);
+  if (byNewline.length > 1) return byNewline;
+
+  // 改行が潰れている場合：次の「YYYY年M月」の手前で分割（先頭以外）
+  const byDate = raw
+    .split(/(?=\d{4}年\d{1,2}月)/)
+    .map((line) => line.trim())
+    .filter(Boolean);
+  return byDate.length > 1 ? byDate : [raw];
+}
 
 /** 国籍名からマスタIDへ変換（履歴書インポート用） */
 export function resolveNationalityIdFromName(name, nationalities = []) {
@@ -854,6 +895,7 @@ export function detailToForm(detail) {
           specialtyDev: detail.personal.specialtyDev ?? '',
           specialtyBusiness: detail.personal.specialtyBusiness ?? '',
           selfPr: detail.personal.selfPr ?? '',
+          remarks: detail.personal.remarks ?? '',
         }
       : { ...EMPTY_PERSONAL },
     skills: (detail.skills || []).map((s) => ({
@@ -990,6 +1032,19 @@ export function formToImportSavePayload(form, employeeCode) {
   });
 }
 
+/** 「3年9ヶ月」等を月数へ。数値化できない場合は null（DB は integer） */
+function parseCareerMonthsForSave(raw) {
+  if (raw === '' || raw == null) return null;
+  const asNumber = Number(raw);
+  if (Number.isFinite(asNumber)) return asNumber;
+  const text = String(raw).trim();
+  const ym = text.match(/(\d+)\s*年\s*(\d+)\s*ヶ?月/);
+  if (ym) return Number(ym[1]) * 12 + Number(ym[2]);
+  const monthsOnly = text.match(/(\d+)\s*ヶ?月/);
+  if (monthsOnly) return Number(monthsOnly[1]);
+  return null;
+}
+
 export function formToSavePayload(form) {
   const withEval = applyEvaluationToForm(form);
   const validItems = withEval.evaluationItems.filter((item) => item.rankGrade);
@@ -1053,7 +1108,7 @@ export function formToSavePayload(form) {
       roleOverview: c.roleOverview,
       startDate: c.startDate || null,
       endDate: c.endDate || null,
-      months: c.months !== '' ? Number(c.months) : null,
+      months: parseCareerMonthsForSave(c.months),
       workplace: c.workplace || null,
       role: c.role || null,
       osDb: c.osDb || null,

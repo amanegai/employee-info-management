@@ -76,37 +76,35 @@ public class PaidLeaveBalanceRepository {
                 INNER JOIN employee_hr hr ON hr.employee_id = e.id
                 LEFT JOIN employee_paid_leave_balance b ON b.employee_id = e.id
                 WHERE b.employee_id IS NULL
-                  AND e.employee_type = ?
+                  AND e.employee_type IN (%s)
                   AND (e.work_status IS DISTINCT FROM ?)
                   AND hr.hire_date IS NOT NULL
                   AND TRIM(hr.hire_date) <> ''
-                """,
+                """.formatted(ELIGIBLE_TYPES_SQL_IN),
                 (rs, rowNum) -> rs.getLong("id"),
-                ELIGIBLE_EMPLOYEE_TYPE,
                 RESIGNED_WORK_STATUS
         );
     }
 
-    /** 有給対象（正社員・未退職）かつ入社日あり。退職予定は含む。 */
+    /** 有給対象（正社員・契約社員・未退職）かつ入社日あり。退職予定は含む。 */
     public List<Long> findEligibleEmployeeIdsWithHireDate() {
         return jdbc.query(
                 """
                 SELECT e.id
                 FROM employee e
                 INNER JOIN employee_hr hr ON hr.employee_id = e.id
-                WHERE e.employee_type = ?
+                WHERE e.employee_type IN (%s)
                   AND (e.work_status IS DISTINCT FROM ?)
                   AND hr.hire_date IS NOT NULL
                   AND TRIM(hr.hire_date) <> ''
-                """,
+                """.formatted(ELIGIBLE_TYPES_SQL_IN),
                 (rs, rowNum) -> rs.getLong("id"),
-                ELIGIBLE_EMPLOYEE_TYPE,
                 RESIGNED_WORK_STATUS
         );
     }
 
     /**
-     * 台帳削除対象：正社員以外、または稼働状況が退職。
+     * 台帳削除対象：有給対象外の社員種別、または稼働状況が退職。
      * 退職予定は対象外（台帳を残す）。
      */
     public List<Long> findIneligibleBalanceEmployeeIds() {
@@ -115,11 +113,10 @@ public class PaidLeaveBalanceRepository {
                 SELECT b.employee_id
                 FROM employee_paid_leave_balance b
                 INNER JOIN employee e ON e.id = b.employee_id
-                WHERE e.employee_type IS DISTINCT FROM ?
+                WHERE e.employee_type NOT IN (%s)
                    OR e.work_status = ?
-                """,
+                """.formatted(ELIGIBLE_TYPES_SQL_IN),
                 (rs, rowNum) -> rs.getLong("employee_id"),
-                ELIGIBLE_EMPLOYEE_TYPE,
                 RESIGNED_WORK_STATUS
         );
     }
@@ -156,8 +153,14 @@ public class PaidLeaveBalanceRepository {
         return rows.stream().findFirst();
     }
 
-    /** 有給付与対象の社員種別（正社員のみ） */
+    /** @deprecated 正社員のみ時代の定数。互換のため残す */
+    @Deprecated
     public static final String ELIGIBLE_EMPLOYEE_TYPE = "正社員";
+
+    /** 有給付与対象の社員種別（正社員・契約社員） */
+    public static final List<String> ELIGIBLE_EMPLOYEE_TYPES = List.of("正社員", "契約社員");
+
+    private static final String ELIGIBLE_TYPES_SQL_IN = "'正社員', '契約社員'";
 
     /** 有給台帳を保持しない稼働状況（退職予定は含まない） */
     public static final String RESIGNED_WORK_STATUS = "退職";

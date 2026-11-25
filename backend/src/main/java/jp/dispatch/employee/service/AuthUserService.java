@@ -10,6 +10,7 @@ import jp.dispatch.employee.dto.AuthUserListItemDto;
 import jp.dispatch.employee.dto.AuthUserSaveRequest;
 import jp.dispatch.employee.dto.DepartmentDto;
 import jp.dispatch.employee.model.AffiliationCompanies;
+import jp.dispatch.employee.model.EmployeeCodeRules;
 import jp.dispatch.employee.model.MasterData;
 import jp.dispatch.employee.repository.AuthUserRepository;
 import jp.dispatch.employee.repository.AuthUserRepository.AssignmentWrite;
@@ -35,6 +36,8 @@ public class AuthUserService {
             AuthRoles.ADMIN,
             AuthRoles.HR,
             AuthRoles.EMPLOYEE,
+            AuthRoles.CONTRACT,
+            AuthRoles.FREELANCER,
             AuthRoles.DIVISION_HEAD,
             AuthRoles.DEPT_HEAD,
             AuthRoles.SALES_HEAD
@@ -255,11 +258,11 @@ public class AuthUserService {
     private void validateSideAssignmentRules(List<AssignmentWrite> assignments) {
         AssignmentWrite primary = primaryAssignment(assignments);
         boolean primaryBlocksSide = AuthRoles.ADMIN.equals(primary.role())
-                || AuthRoles.EMPLOYEE.equals(primary.role());
+                || AuthRoles.isMyPageOnlyRole(primary.role());
         if (primaryBlocksSide && assignments.size() > 1) {
             throw new ResponseStatusException(
                     HttpStatus.BAD_REQUEST,
-                    "管理者・一般社員の本職では兼職を設定できません"
+                    "管理者・一般社員・契約社員・個人事業主の本職では兼職を設定できません"
             );
         }
         for (AssignmentWrite assignment : assignments) {
@@ -294,8 +297,13 @@ public class AuthUserService {
         if (employeeId == null || employeeId <= 0) {
             return null;
         }
-        if (employeeRepository.findById(employeeId).isEmpty()) {
-            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "連携する社員が見つかりません");
+        var employee = employeeRepository.findById(employeeId)
+                .orElseThrow(() -> new ResponseStatusException(HttpStatus.BAD_REQUEST, "連携する社員が見つかりません"));
+        if (EmployeeCodeRules.TYPE_BP.equals(employee.employeeType())) {
+            throw new ResponseStatusException(
+                    HttpStatus.BAD_REQUEST,
+                    "BP 社員は社員OAシステムにログインできないため、ユーザー連携できません"
+            );
         }
         if (authUserRepository.isEmployeeLinkedToOtherUser(employeeId, excludeUserId)) {
             throw new ResponseStatusException(HttpStatus.CONFLICT, "この社員は既に別ユーザーに連携されています");

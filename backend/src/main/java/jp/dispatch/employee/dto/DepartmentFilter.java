@@ -10,7 +10,10 @@ public final class DepartmentFilter {
     private DepartmentFilter() {
     }
 
-    /** 配下に開発部などを持つ事業部（親部門）を選択肢から除外する */
+    /**
+     * 配下に開発部などを持つ事業部（親部門）を選択肢から除外する。
+     * 社員所属では事業部単体を許可するため、マスタ選択肢からは原則呼ばない。
+     */
     public static List<DepartmentDto> excludeParentDepartments(List<DepartmentDto> departments) {
         if (departments == null || departments.isEmpty()) {
             return List.of();

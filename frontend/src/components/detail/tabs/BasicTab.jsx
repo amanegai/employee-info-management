@@ -7,12 +7,14 @@ function isEmptyValue(value) {
   return value == null || value === '' || value === '—' || value === EMPTY_DISPLAY;
 }
 
-function InfoCell({ label, value }) {
+function InfoCell({ label, value, multiline = false }) {
   const empty = isEmptyValue(value);
   return (
     <div className="detail-info-cell">
       <div className="detail-info-label">{label}</div>
-      <div className={`detail-info-value${empty ? ' is-empty' : ''}`}>
+      <div
+        className={`detail-info-value${empty ? ' is-empty' : ''}${multiline && !empty ? ' is-multiline' : ''}`}
+      >
         {empty ? EMPTY_DISPLAY : value}
       </div>
     </div>
@@ -166,7 +168,7 @@ export default function BasicTab({ employee }) {
             <h6 className="detail-form-subsection-title">最終学歴</h6>
             <div className="row g-3 detail-personal-fields mb-3">
               <div className="col-md-4">
-                <InfoCell label="学位" value={p.educationDegree} />
+                <InfoCell label="最終学歴" value={p.educationDegree} />
               </div>
               <div className="col-md-4">
                 <InfoCell label="学校名" value={p.schoolName} />
@@ -208,13 +210,16 @@ export default function BasicTab({ employee }) {
             <h6 className="detail-form-subsection-title">得意分野・自己PR</h6>
             <div className="row g-3 detail-personal-fields">
               <div className="col-md-6">
-                <InfoCell label="開発技術" value={p.specialtyDev} />
+                <InfoCell label="開発技術" value={p.specialtyDev} multiline />
               </div>
               <div className="col-md-6">
-                <InfoCell label="業務知識" value={p.specialtyBusiness} />
+                <InfoCell label="業務知識" value={p.specialtyBusiness} multiline />
               </div>
               <div className="col-12">
-                <InfoCell label="自己PR" value={p.selfPr} />
+                <InfoCell label="自己PR" value={p.selfPr} multiline />
+              </div>
+              <div className="col-12">
+                <InfoCell label="備考" value={p.remarks} multiline />
               </div>
             </div>
           </>

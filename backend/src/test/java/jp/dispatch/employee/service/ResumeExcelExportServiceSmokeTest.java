@@ -36,7 +36,7 @@ class ResumeExcelExportServiceSmokeTest {
                 5, "2019/11/01", "大学", "北京体育大学", "応用心理学",
                 "N1", "B", "◎", "◎",
                 "D", "D", "△", "△",
-                "上級", "Java、PHP", "人事、物流", "自己PR"
+                "上級", "Java、PHP", "人事、物流", "自己PR", "備考テスト"
         );
         EmployeeDetailDto detail = new EmployeeDetailDto(
                 1L, "btcS00001", "蘇　娟", 1L, "開発部", "ビットクロス",

@@ -9,17 +9,21 @@ import jp.dispatch.employee.dto.EmployeeSaveRequest.EvaluationItemSaveDto;
 import jp.dispatch.employee.model.EvaluationCalculator;
 import jp.dispatch.employee.model.EvaluationCalculator.ParsedEvaluation;
 import jp.dispatch.employee.model.EvaluationCategoryMeta;
+import org.springframework.http.HttpStatus;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.stereotype.Repository;
+import org.springframework.web.server.ResponseStatusException;
 
 import java.time.LocalDate;
 import java.time.Period;
 import java.time.format.DateTimeFormatter;
 import java.util.ArrayList;
+import java.util.HashSet;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
+import java.util.Set;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 
@@ -133,8 +137,8 @@ public class EmployeeDetailRepository {
                      nearest_station, photo_url, furigana, marital_status, it_industry_years, japan_arrival_date,
                      education_degree, school_name, major, japanese_level, japanese_conversation, japanese_reading,
                      japanese_writing, english_level, english_conversation, english_reading, english_writing,
-                     technical_level, specialty_dev, specialty_business, self_pr)
-                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                     technical_level, specialty_dev, specialty_business, self_pr, remarks)
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
                 """,
                 employeeId,
                 personal.gender(),
@@ -167,7 +171,8 @@ public class EmployeeDetailRepository {
                 personal.technicalLevel(),
                 personal.specialtyDev(),
                 personal.specialtyBusiness(),
-                personal.selfPr()
+                personal.selfPr(),
+                personal.remarks()
         );
     }
 
@@ -183,7 +188,7 @@ public class EmployeeDetailRepository {
                 && isBlank(p.japaneseReading()) && isBlank(p.japaneseWriting()) && isBlank(p.englishLevel())
                 && isBlank(p.englishConversation()) && isBlank(p.englishReading()) && isBlank(p.englishWriting())
                 && isBlank(p.technicalLevel()) && isBlank(p.specialtyDev()) && isBlank(p.specialtyBusiness())
-                && isBlank(p.selfPr());
+                && isBlank(p.selfPr()) && isBlank(p.remarks());
     }
 
     private void replaceSkills(long employeeId, List<SkillDto> skills) {
@@ -261,6 +266,7 @@ public class EmployeeDetailRepository {
         if (careers == null) {
             return;
         }
+        Set<String> uniqueKeys = new HashSet<>();
         int order = 0;
         for (CareerDto c : careers) {
             if (c == null || isCareerEmpty(c)) {
@@ -268,6 +274,15 @@ public class EmployeeDetailRepository {
             }
             String period = !isBlank(c.period()) ? c.period().trim() : buildCareerPeriod(c);
             String organization = c.organization() != null ? c.organization().trim() : "";
+            String uniqueKey = period + "\u0000" + organization;
+            if (!uniqueKeys.add(uniqueKey)) {
+                throw new ResponseStatusException(
+                        HttpStatus.BAD_REQUEST,
+                        "履歴書の内容に問題があります。職務経歴に同一期間（"
+                                + (period.isEmpty() ? "空" : period)
+                                + "）の行が複数あります。Excel を修正してから再度取り込んでください"
+                );
+            }
             jdbc.update(
                     """
                     INSERT INTO employee_career
@@ -667,7 +682,7 @@ public class EmployeeDetailRepository {
                        p.furigana, p.marital_status, p.it_industry_years, p.japan_arrival_date, p.education_degree, p.school_name,
                        p.major, p.japanese_level, p.japanese_conversation, p.japanese_reading, p.japanese_writing,
                        p.english_level, p.english_conversation, p.english_reading, p.english_writing, p.technical_level,
-                       p.specialty_dev, p.specialty_business, p.self_pr
+                       p.specialty_dev, p.specialty_business, p.self_pr, p.remarks
                 FROM employee_personal p
                 LEFT JOIN nationality n ON n.id = p.nationality_id
                 LEFT JOIN residence_status rs ON rs.id = p.residence_status_id
@@ -722,7 +737,8 @@ public class EmployeeDetailRepository {
                             rs.getString("technical_level"),
                             rs.getString("specialty_dev"),
                             rs.getString("specialty_business"),
-                            rs.getString("self_pr")
+                            rs.getString("self_pr"),
+                            rs.getString("remarks")
                     );
                 },
                 employeeId
