@@ -9,6 +9,7 @@ import jp.dispatch.employee.dto.AuthUserAssignmentInput;
 import jp.dispatch.employee.dto.AuthUserListItemDto;
 import jp.dispatch.employee.dto.AuthUserSaveRequest;
 import jp.dispatch.employee.dto.DepartmentDto;
+import jp.dispatch.employee.dto.PagedResultDto;
 import jp.dispatch.employee.model.AffiliationCompanies;
 import jp.dispatch.employee.model.EmployeeCodeRules;
 import jp.dispatch.employee.model.MasterData;
@@ -63,11 +64,25 @@ public class AuthUserService {
         this.auditLogService = auditLogService;
     }
 
-    public List<AuthUserListItemDto> list() {
+    public PagedResultDto<AuthUserListItemDto> list(
+            String keyword,
+            String role,
+            String affiliationCompany,
+            Boolean enabled,
+            int page,
+            int size
+    ) {
         requireManagePermission();
-        return authUserRepository.findAllUsers().stream()
+        int safeSize = Math.min(Math.max(size, 1), 100);
+        int safePage = Math.max(page, 1);
+        int offset = (safePage - 1) * safeSize;
+        long total = authUserRepository.countUsers(keyword, role, affiliationCompany, enabled);
+        List<AuthUserListItemDto> items = authUserRepository
+                .searchUsers(keyword, role, affiliationCompany, enabled, safeSize, offset)
+                .stream()
                 .map(this::toListItem)
                 .toList();
+        return new PagedResultDto<>(items, total, safePage, safeSize);
     }
 
     public AuthUserListItemDto create(AuthUserSaveRequest request) {

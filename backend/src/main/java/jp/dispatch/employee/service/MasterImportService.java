@@ -711,6 +711,7 @@ public class MasterImportService {
                 blankToNull(rank),
                 status,
                 blankToNull(text(row, "備考")),
+                null,
                 List.of(),
                 List.of()
         );

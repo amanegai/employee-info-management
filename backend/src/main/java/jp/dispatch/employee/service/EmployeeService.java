@@ -213,11 +213,8 @@ public class EmployeeService {
 
     public EmployeeDetailDto getDetail(long id) {
         requireEmployeeDirectoryAccess();
-        detailRepository.findDetail(id)
-                .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "社員が見つかりません"));
-
-        calculationService.syncEvaluation(id);
-
+        // 閲覧では DB の version を進めない。算出結果は calculateDto で画面に載せる。
+        // employee.evaluation 列への同期は保存時・起動時 sync に任せる。
         EmployeeDetailDto baseDetail = detailRepository.findDetail(id)
                 .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "社員が見つかりません"));
 
@@ -604,7 +601,7 @@ public class EmployeeService {
             }
             throw new ResponseStatusException(
                     HttpStatus.CONFLICT,
-                    "他のユーザーにより更新されています。最新データを再読み込みしてから保存してください"
+                    "保存が競合しました。最新データを取得してもう一度保存してください"
             );
         }
         detailRepository.saveDetail(id, locked);

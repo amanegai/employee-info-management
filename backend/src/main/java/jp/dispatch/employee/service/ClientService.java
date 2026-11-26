@@ -127,8 +127,17 @@ public class ClientService {
     public ClientDetailDto update(long id, ClientSaveRequest request) {
         requireWritePermission();
         validateSaveRequest(request);
-        if (!repository.update(id, request, resolveLocation(request), now())) {
-            throw new ResponseStatusException(HttpStatus.NOT_FOUND, "取引先が見つかりません");
+        if (request.version() == null) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "更新バージョンが指定されていません。画面を再読み込みしてください");
+        }
+        if (!repository.updateOptimistic(id, request, resolveLocation(request), now(), request.version())) {
+            if (repository.findDetailById(id).isEmpty()) {
+                throw new ResponseStatusException(HttpStatus.NOT_FOUND, "取引先が見つかりません");
+            }
+            throw new ResponseStatusException(
+                    HttpStatus.CONFLICT,
+                    "保存が競合しました。最新データを取得してもう一度保存してください"
+            );
         }
         repository.deleteClientContacts(id);
         repository.deleteInternalContacts(id);

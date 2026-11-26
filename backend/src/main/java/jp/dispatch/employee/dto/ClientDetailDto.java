@@ -38,6 +38,7 @@ public record ClientDetailDto(
         String notes,
         String createdAt,
         String updatedAt,
+        int version,
         int relatedProjectCount,
         List<ClientContactDto> clientContacts,
         List<ClientInternalContactDto> internalContacts

@@ -658,18 +658,23 @@ public class EmployeeRepository {
         return rows.isEmpty() ? Optional.empty() : Optional.ofNullable(rows.getFirst());
     }
 
+    /**
+     * 算出評価の同期用。楽観ロック version は進めない
+     * （閲覧時 sync で version が変わると編集保存が衝突するため）。
+     */
     public void updateEvaluation(long employeeId, String evaluation) {
         jdbc.update(
                 """
                 UPDATE employee
                 SET evaluation = ?,
-                    version = COALESCE(version, 1) + 1,
                     updated_at = ?
                 WHERE id = ?
+                  AND evaluation IS DISTINCT FROM ?
                 """,
                 evaluation,
                 nowTimestamp(),
-                employeeId
+                employeeId,
+                evaluation
         );
     }
 
@@ -690,12 +695,12 @@ public class EmployeeRepository {
         return rows.isEmpty() ? Optional.empty() : Optional.of(rows.getFirst());
     }
 
+    /** 稼働状況のシステム同期用。楽観ロック version は進めない。 */
     public void updateWorkStatusAndEndDate(long id, String workStatus, String endDate) {
         jdbc.update(
                 """
                 UPDATE employee
                 SET work_status = ?, end_date = ?,
-                    version = COALESCE(version, 1) + 1,
                     updated_at = ?
                 WHERE id = ?
                 """,

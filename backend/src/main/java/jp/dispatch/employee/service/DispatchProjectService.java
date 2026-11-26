@@ -115,9 +115,12 @@ public class DispatchProjectService {
         requireWritePermission();
         ensureProjectExists(id);
         validateSaveRequest(request);
+        if (request.version() == null) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "更新バージョンが指定されていません。画面を再読み込みしてください");
+        }
         String now = timestampNow();
         ResolvedClient client = resolveClient(request.clientId(), request.clientName());
-        projectRepository.update(
+        boolean updated = projectRepository.updateOptimistic(
                 id,
                 client.clientId(),
                 client.clientName(),
@@ -137,8 +140,18 @@ public class DispatchProjectService {
                 request.ownerUserId(),
                 blankToNull(request.notes()),
                 blankToNull(request.periodNotes()),
-                now
+                now,
+                request.version()
         );
+        if (!updated) {
+            if (projectRepository.findById(id).isEmpty()) {
+                throw new ResponseStatusException(HttpStatus.NOT_FOUND, "案件が見つかりません");
+            }
+            throw new ResponseStatusException(
+                    HttpStatus.CONFLICT,
+                    "保存が競合しました。最新データを取得してもう一度保存してください"
+            );
+        }
         syncHeadcountStatus(id, now);
         return getById(id);
     }
@@ -337,6 +350,7 @@ public class DispatchProjectService {
                 project.pendingReferralCount(),
                 project.createdAt(),
                 project.updatedAt(),
+                project.version(),
                 candidates
         );
     }

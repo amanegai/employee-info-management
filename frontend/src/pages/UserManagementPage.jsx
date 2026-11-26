@@ -85,10 +85,24 @@ function userToForm(user) {
   };
 }
 
+const DEFAULT_PAGE_SIZE = 20;
+
+const EMPTY_FILTERS = {
+  keyword: '',
+  role: '',
+  affiliationCompany: '',
+  enabled: '',
+};
+
 export default function UserManagementPage() {
   const { user: currentUser, refreshUser } = useAuth();
   const { showMessage } = useAppMessage();
   const [users, setUsers] = useState([]);
+  const [totalUsers, setTotalUsers] = useState(0);
+  const [page, setPage] = useState(1);
+  const [pageSize] = useState(DEFAULT_PAGE_SIZE);
+  const [filterDraft, setFilterDraft] = useState(EMPTY_FILTERS);
+  const [appliedFilters, setAppliedFilters] = useState(EMPTY_FILTERS);
   const [departments, setDepartments] = useState([]);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
@@ -286,25 +300,94 @@ export default function UserManagementPage() {
     clearEmployeeLookupUi();
   }
 
-  const loadData = useCallback(async () => {
-    setLoading(true);
+  const totalPages = useMemo(
+    () => (pageSize > 0 ? Math.max(1, Math.ceil(totalUsers / pageSize)) : 1),
+    [totalUsers, pageSize],
+  );
+
+  const hasActiveFilters = Boolean(
+    appliedFilters.keyword ||
+      appliedFilters.role ||
+      appliedFilters.affiliationCompany ||
+      appliedFilters.enabled !== '',
+  );
+
+  const loadMaster = useCallback(async () => {
     try {
-      const [userList, master] = await Promise.all([api.listUsers(), api.getMaster()]);
-      setUsers(userList);
+      const master = await api.getMaster();
       setDepartments(master.departments ?? []);
       setCompanyOptions(
         master.affiliationCompanies?.length ? master.affiliationCompanies : AFFILIATION_COMPANIES,
       );
     } catch (e) {
       showMessage(e.message, 'danger');
-    } finally {
-      setLoading(false);
     }
   }, [showMessage]);
 
+  const loadUsers = useCallback(
+    async (filters = appliedFilters, pageToLoad = page) => {
+      setLoading(true);
+      try {
+        const params = {
+          page: pageToLoad,
+          size: pageSize,
+        };
+        if (filters.keyword?.trim()) params.keyword = filters.keyword.trim();
+        if (filters.role) params.role = filters.role;
+        if (filters.affiliationCompany) params.affiliationCompany = filters.affiliationCompany;
+        if (filters.enabled === 'true') params.enabled = true;
+        if (filters.enabled === 'false') params.enabled = false;
+        const result = await api.listUsers(params);
+        const items = Array.isArray(result) ? result : (result?.items ?? []);
+        const total = Array.isArray(result) ? result.length : Number(result?.total ?? 0);
+        const maxPage = Math.max(1, Math.ceil(total / pageSize) || 1);
+        if (pageToLoad > maxPage) {
+          setPage(maxPage);
+          return;
+        }
+        setUsers(items);
+        setTotalUsers(total);
+      } catch (e) {
+        showMessage(e.message, 'danger');
+        setUsers([]);
+        setTotalUsers(0);
+      } finally {
+        setLoading(false);
+      }
+    },
+    [appliedFilters, page, pageSize, showMessage],
+  );
+
+  const loadData = useCallback(async () => {
+    await Promise.all([loadMaster(), loadUsers()]);
+  }, [loadMaster, loadUsers]);
+
   useEffect(() => {
-    loadData();
-  }, [loadData]);
+    loadMaster();
+  }, [loadMaster]);
+
+  useEffect(() => {
+    loadUsers(appliedFilters, page);
+  }, [appliedFilters, page, loadUsers]);
+
+  function handleSearch(event) {
+    event?.preventDefault?.();
+    const next = {
+      keyword: filterDraft.keyword.trim(),
+      role: filterDraft.role,
+      affiliationCompany: filterDraft.affiliationCompany,
+      enabled: filterDraft.enabled,
+    };
+    setFilterDraft(next);
+    setPage(1);
+    setAppliedFilters(next);
+  }
+
+  function handleClearFilters() {
+    setFilterDraft(EMPTY_FILTERS);
+    setPage(1);
+    setAppliedFilters(EMPTY_FILTERS);
+  }
 
   function openCreateModal() {
     setEditingUser(null);
@@ -470,9 +553,77 @@ export default function UserManagementPage() {
           <ListSectionBar
             icon="bi-people-fill"
             title="ユーザー一覧"
-            count={users.length}
+            count={totalUsers}
             hideCount={loading}
           />
+
+          <form className="file-list-filter-form user-mgmt-filter-form" onSubmit={handleSearch}>
+            <div className="file-list-filter-row">
+              <div className="input-group file-list-search">
+                <span className="input-group-text">
+                  <i className="bi bi-search" aria-hidden="true" />
+                </span>
+                <input
+                  type="search"
+                  className="form-control"
+                  placeholder="ユーザー名 / 表示名 / メール / 社員ID・氏名"
+                  value={filterDraft.keyword}
+                  onChange={(e) => setFilterDraft((prev) => ({ ...prev, keyword: e.target.value }))}
+                  aria-label="キーワード検索"
+                />
+              </div>
+              <select
+                className="form-select file-list-filter-select"
+                value={filterDraft.role}
+                onChange={(e) => setFilterDraft((prev) => ({ ...prev, role: e.target.value }))}
+                aria-label="ロールで絞り込み"
+              >
+                <option value="">すべてのロール</option>
+                {USER_ROLE_OPTIONS.map((opt) => (
+                  <option key={opt.value} value={opt.value}>
+                    {opt.label}
+                  </option>
+                ))}
+              </select>
+              <select
+                className="form-select file-list-filter-select"
+                value={filterDraft.affiliationCompany}
+                onChange={(e) =>
+                  setFilterDraft((prev) => ({ ...prev, affiliationCompany: e.target.value }))
+                }
+                aria-label="所属会社で絞り込み"
+              >
+                <option value="">すべての会社</option>
+                {companyOptions.map((company) => (
+                  <option key={company} value={company}>
+                    {company}
+                  </option>
+                ))}
+              </select>
+              <select
+                className="form-select file-list-filter-select"
+                value={filterDraft.enabled}
+                onChange={(e) => setFilterDraft((prev) => ({ ...prev, enabled: e.target.value }))}
+                aria-label="状態で絞り込み"
+              >
+                <option value="">すべての状態</option>
+                <option value="true">有効</option>
+                <option value="false">無効</option>
+              </select>
+              <button type="submit" className="btn btn-primary app-btn file-list-filter-submit">
+                検索
+              </button>
+              {hasActiveFilters && (
+                <button
+                  type="button"
+                  className="btn btn-outline-secondary app-btn file-list-filter-clear"
+                  onClick={handleClearFilters}
+                >
+                  クリア
+                </button>
+              )}
+            </div>
+          </form>
 
         {loading ? (
           <div className="page-state-panel">
@@ -482,9 +633,14 @@ export default function UserManagementPage() {
         ) : users.length === 0 ? (
           <div className="page-state-panel">
             <i className="bi bi-person-x page-state-panel-icon" aria-hidden="true" />
-            <p className="mb-0">登録されているユーザーがありません。</p>
+            <p className="mb-0">
+              {hasActiveFilters
+                ? '条件に一致するユーザーが見つかりません。'
+                : '登録されているユーザーがありません。'}
+            </p>
           </div>
         ) : (
+          <>
           <div className="user-mgmt-table-wrap user-mgmt-table-wrap-inset">
             <table className="table table-hover align-middle mb-0 user-mgmt-table">
               <thead>
@@ -633,6 +789,36 @@ export default function UserManagementPage() {
               </tbody>
             </table>
           </div>
+          {totalUsers > 0 && (
+            <div className="user-mgmt-pagination" aria-label="ページネーション">
+              <span className="user-mgmt-pagination-meta">
+                全 {totalUsers} 件中 {(page - 1) * pageSize + 1}–
+                {Math.min(page * pageSize, totalUsers)} 件
+              </span>
+              <div className="user-mgmt-pagination-controls">
+                <button
+                  type="button"
+                  className="btn btn-outline-secondary btn-sm app-btn"
+                  disabled={page <= 1 || loading}
+                  onClick={() => setPage((prev) => Math.max(1, prev - 1))}
+                >
+                  前へ
+                </button>
+                <span className="user-mgmt-pagination-page">
+                  {page} / {totalPages}
+                </span>
+                <button
+                  type="button"
+                  className="btn btn-outline-secondary btn-sm app-btn"
+                  disabled={page >= totalPages || loading}
+                  onClick={() => setPage((prev) => Math.min(totalPages, prev + 1))}
+                >
+                  次へ
+                </button>
+              </div>
+            </div>
+          )}
+          </>
         )}
         </div>
       </section>

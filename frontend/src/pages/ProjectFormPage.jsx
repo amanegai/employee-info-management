@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { Link, useLocation, useNavigate, useParams } from 'react-router-dom';
-import { api } from '../api';
+import { ApiError, api } from '../api';
 import AppFooter from '../components/AppFooter';
 import PageGuideHelpButton from '../components/guide/PageGuideHelpButton';
 import ClientNamePicker from '../components/ClientNamePicker';
@@ -38,6 +38,7 @@ const EMPTY_FORM = {
   headcountRequired: '1',
   status: 'OPEN',
   notes: '',
+  version: null,
 };
 
 function projectToForm(project) {
@@ -59,6 +60,7 @@ function projectToForm(project) {
     headcountRequired: String(project.headcountRequired ?? 1),
     status: project.status || 'OPEN',
     notes: project.notes || '',
+    version: project.version != null ? Number(project.version) : null,
   };
 }
 
@@ -81,6 +83,7 @@ function buildPayload(form) {
     projectRole: form.projectRole.trim() || null,
     headcountRequired: Number(form.headcountRequired) || 1,
     notes: form.notes.trim() || null,
+    version: form.version != null ? Number(form.version) : null,
   };
 }
 
@@ -171,7 +174,23 @@ export default function ProjectFormPage({ mode = 'create' }) {
         navigate(`/projects/${created.id}`, returnState ? { state: returnState } : undefined);
       }
     } catch (e) {
-      showMessage(e.message || '保存に失敗しました', 'danger');
+      const isConflict = e instanceof ApiError && e.status === 409;
+      if (isConflict && mode === 'edit' && id) {
+        try {
+          const project = await api.getProject(id);
+          setForm((prev) => ({ ...prev, version: project.version != null ? Number(project.version) : null }));
+          const retryHint =
+            '保存時に競合しました。入力内容はそのままです。もう一度「保存」を押してください。';
+          showMessage(retryHint, 'warning');
+        } catch {
+          showMessage(
+            '保存が競合しました。画面を再読み込みしてからもう一度保存してください',
+            'danger'
+          );
+        }
+      } else {
+        showMessage(e.message || '保存に失敗しました', 'danger');
+      }
     } finally {
       savingRef.current = false;
       setSaving(false);
