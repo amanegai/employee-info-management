@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { Link, useNavigate, useParams } from 'react-router-dom';
-import { ApiError, api } from '../api';
+import { api, isOptimisticLockConflict } from '../api';
 import AppFooter from '../components/AppFooter';
 import PageGuideHelpButton from '../components/guide/PageGuideHelpButton';
 import ListSectionBar from '../components/ListSectionBar';
@@ -272,8 +272,7 @@ export default function ClientFormPage({ mode = 'create' }) {
         navigate(`/clients/${created.id}`);
       }
     } catch (e) {
-      const isConflict = e instanceof ApiError && e.status === 409;
-      if (isConflict && mode === 'edit' && id) {
+      if (isOptimisticLockConflict(e) && mode === 'edit' && id) {
         try {
           const client = await api.getClient(id);
           setForm((prev) => ({

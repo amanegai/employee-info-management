@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { Link, useLocation, useNavigate, useParams } from 'react-router-dom';
-import { ApiError, api } from '../api';
+import { api, isOptimisticLockConflict } from '../api';
 import AppFooter from '../components/AppFooter';
 import PageGuideHelpButton from '../components/guide/PageGuideHelpButton';
 import ClientNamePicker from '../components/ClientNamePicker';
@@ -174,8 +174,7 @@ export default function ProjectFormPage({ mode = 'create' }) {
         navigate(`/projects/${created.id}`, returnState ? { state: returnState } : undefined);
       }
     } catch (e) {
-      const isConflict = e instanceof ApiError && e.status === 409;
-      if (isConflict && mode === 'edit' && id) {
+      if (isOptimisticLockConflict(e) && mode === 'edit' && id) {
         try {
           const project = await api.getProject(id);
           setForm((prev) => ({ ...prev, version: project.version != null ? Number(project.version) : null }));

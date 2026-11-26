@@ -10,6 +10,45 @@ export class ApiError extends Error {
   }
 }
 
+/** 楽観ロック衝突のみ true。同名重複など他の 409 は含めない。 */
+export function isOptimisticLockConflict(error) {
+  return (
+    error instanceof ApiError &&
+    error.status === 409 &&
+    typeof error.message === 'string' &&
+    error.message.includes('保存が競合しました')
+  );
+}
+
+function extractApiErrorMessage(body, status, fallback) {
+  const candidates = [
+    body?.detail,
+    body?.message,
+    body?.error,
+    body?.title,
+    fallback,
+  ];
+  for (const candidate of candidates) {
+    if (typeof candidate !== 'string') continue;
+    const text = candidate.trim();
+    if (!text) continue;
+    // ProblemDetail の title（例: "409 CONFLICT"）をユーザー向け文言に使わない
+    if (/^\d{3}(\s|$)/.test(text)) continue;
+    if (
+      text === 'Bad Request' ||
+      text === 'Conflict' ||
+      text === 'Forbidden' ||
+      text === 'Not Found' ||
+      text === 'Internal Server Error' ||
+      text === 'Unauthorized'
+    ) {
+      continue;
+    }
+    return text;
+  }
+  return `リクエストに失敗しました（HTTP ${status}）`;
+}
+
 async function importMasterFile(path, file, dryRun) {
   const formData = new FormData();
   formData.append('file', file);
@@ -23,14 +62,13 @@ async function importMasterFile(path, file, dryRun) {
     unauthorizedHandler?.();
   }
   if (!res.ok) {
-    let message = res.statusText;
+    let body = null;
     try {
-      const body = await res.json();
-      message = body.detail || body.message || body.title || message;
+      body = await res.json();
     } catch {
       /* ignore */
     }
-    throw new Error(message);
+    throw new Error(extractApiErrorMessage(body, res.status, res.statusText));
   }
   return res.json();
 }
@@ -56,17 +94,13 @@ async function request(path, options = {}) {
     }
   }
   if (!res.ok) {
-    let message = res.statusText;
+    let body = null;
     try {
-      const body = await res.json();
-      message = body.detail || body.message || body.title || body.error || message;
+      body = await res.json();
     } catch {
       /* ignore */
     }
-    if (!message || message === 'Bad Request' || message === 'Internal Server Error') {
-      message = `リクエストに失敗しました（HTTP ${res.status}）`;
-    }
-    throw new ApiError(message, res.status);
+    throw new ApiError(extractApiErrorMessage(body, res.status, res.statusText), res.status);
   }
   if (res.status === 204) return null;
   const text = await res.text();

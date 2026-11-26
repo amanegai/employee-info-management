@@ -570,22 +570,25 @@ public class MasterImportService {
         String englishWriting = normalizeMark(optionalChoice(row, "英語_仕様書作成", DOCUMENT_MARKS, errors));
 
         if (!isBlank(name)) {
+            String companyKey = affiliationCompany == null ? "" : affiliationCompany.trim();
             String identityKey = String.join("|",
+                    companyKey,
                     name.trim(),
                     gender == null ? "" : gender.trim(),
                     birthDate == null ? "" : birthDate.trim(),
                     arrival == null ? "" : arrival.trim()
             );
             if (!identitiesInFile.add(identityKey)) {
-                errors.add(error(row, "社員名", "ファイル内で姓名・性別・生年月日・来日年月が重複しています"));
+                errors.add(error(row, "社員名", "ファイル内で同一所属会社の姓名・性別・生年月日・来日年月が重複しています"));
             } else if (employeeRepository.existsIdentityMatch(
                     name,
                     gender == null ? "" : gender,
                     birthDate == null ? "" : birthDate,
                     arrival == null ? "" : arrival,
+                    affiliationCompany,
                     null
             )) {
-                errors.add(error(row, "社員名", "姓名・性別・生年月日・来日年月が一致する社員が既に登録されています"));
+                errors.add(error(row, "社員名", "同一所属会社内に、姓名・性別・生年月日・来日年月が一致する社員が既に登録されています"));
             }
         }
 

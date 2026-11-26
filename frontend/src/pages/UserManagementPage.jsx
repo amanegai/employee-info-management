@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { Link } from 'react-router-dom';
 import { api } from '../api';
 import ListSectionBar from '../components/ListSectionBar';
@@ -86,6 +86,7 @@ function userToForm(user) {
 }
 
 const DEFAULT_PAGE_SIZE = 20;
+const PAGE_SIZE_OPTIONS = [20, 50, 100];
 
 const EMPTY_FILTERS = {
   keyword: '',
@@ -94,13 +95,133 @@ const EMPTY_FILTERS = {
   enabled: '',
 };
 
+function buildPageItems(current, total) {
+  if (total <= 7) {
+    return Array.from({ length: total }, (_, i) => i + 1);
+  }
+  const items = [];
+  const push = (value) => {
+    if (items[items.length - 1] !== value) items.push(value);
+  };
+  push(1);
+  const start = Math.max(2, current - 1);
+  const end = Math.min(total - 1, current + 1);
+  if (start > 2) push('…');
+  for (let p = start; p <= end; p += 1) push(p);
+  if (end < total - 1) push('…');
+  push(total);
+  return items;
+}
+
+function UserListPagination({
+  page,
+  totalPages,
+  totalUsers,
+  pageSize,
+  loading,
+  onPageChange,
+  onPageSizeChange,
+}) {
+  if (totalUsers <= 0) return null;
+  const from = (page - 1) * pageSize + 1;
+  const to = Math.min(page * pageSize, totalUsers);
+  const pageItems = buildPageItems(page, totalPages);
+
+  return (
+    <div className="user-mgmt-pagination" aria-label="ページネーション">
+      <div className="user-mgmt-pagination-meta">
+        <span>
+          全 {totalUsers} 件中 {from}–{to} 件
+        </span>
+        <label className="user-mgmt-page-size">
+          <span>表示件数</span>
+          <select
+            className="form-select form-select-sm"
+            value={pageSize}
+            disabled={loading}
+            onChange={(e) => onPageSizeChange(Number(e.target.value))}
+            aria-label="1ページあたりの表示件数"
+          >
+            {PAGE_SIZE_OPTIONS.map((size) => (
+              <option key={size} value={size}>
+                {size}件
+              </option>
+            ))}
+          </select>
+        </label>
+      </div>
+      <div className="user-mgmt-pagination-controls">
+        <button
+          type="button"
+          className="btn btn-outline-secondary btn-sm app-btn"
+          disabled={page <= 1 || loading}
+          onClick={() => onPageChange(1)}
+          title="最初のページ"
+          aria-label="最初のページ"
+        >
+          «
+        </button>
+        <button
+          type="button"
+          className="btn btn-outline-secondary btn-sm app-btn"
+          disabled={page <= 1 || loading}
+          onClick={() => onPageChange(page - 1)}
+        >
+          前へ
+        </button>
+        <div className="user-mgmt-page-numbers" role="group" aria-label="ページ番号">
+          {pageItems.map((item, index) =>
+            item === '…' ? (
+              <span key={`ellipsis-${index}`} className="user-mgmt-page-ellipsis">
+                …
+              </span>
+            ) : (
+              <button
+                key={item}
+                type="button"
+                className={`btn btn-sm app-btn user-mgmt-page-btn${
+                  item === page ? ' is-active' : ' btn-outline-secondary'
+                }`}
+                disabled={loading || item === page}
+                onClick={() => onPageChange(item)}
+                aria-current={item === page ? 'page' : undefined}
+              >
+                {item}
+              </button>
+            ),
+          )}
+        </div>
+        <button
+          type="button"
+          className="btn btn-outline-secondary btn-sm app-btn"
+          disabled={page >= totalPages || loading}
+          onClick={() => onPageChange(page + 1)}
+        >
+          次へ
+        </button>
+        <button
+          type="button"
+          className="btn btn-outline-secondary btn-sm app-btn"
+          disabled={page >= totalPages || loading}
+          onClick={() => onPageChange(totalPages)}
+          title="最後のページ"
+          aria-label="最後のページ"
+        >
+          »
+        </button>
+      </div>
+    </div>
+  );
+}
+
 export default function UserManagementPage() {
   const { user: currentUser, refreshUser } = useAuth();
   const { showMessage } = useAppMessage();
   const [users, setUsers] = useState([]);
   const [totalUsers, setTotalUsers] = useState(0);
   const [page, setPage] = useState(1);
-  const [pageSize] = useState(DEFAULT_PAGE_SIZE);
+  const [pageSize, setPageSize] = useState(DEFAULT_PAGE_SIZE);
+  const listAnchorRef = useRef(null);
   const [filterDraft, setFilterDraft] = useState(EMPTY_FILTERS);
   const [appliedFilters, setAppliedFilters] = useState(EMPTY_FILTERS);
   const [departments, setDepartments] = useState([]);
@@ -389,6 +510,24 @@ export default function UserManagementPage() {
     setAppliedFilters(EMPTY_FILTERS);
   }
 
+  function scrollListIntoView() {
+    listAnchorRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+  }
+
+  function handlePageChange(nextPage) {
+    const safe = Math.min(Math.max(1, nextPage), totalPages);
+    if (safe === page) return;
+    setPage(safe);
+    scrollListIntoView();
+  }
+
+  function handlePageSizeChange(nextSize) {
+    const size = PAGE_SIZE_OPTIONS.includes(nextSize) ? nextSize : DEFAULT_PAGE_SIZE;
+    setPageSize(size);
+    setPage(1);
+    scrollListIntoView();
+  }
+
   function openCreateModal() {
     setEditingUser(null);
     setForm(EMPTY_FORM);
@@ -548,7 +687,11 @@ export default function UserManagementPage() {
         </button>
       </PageHeader>
 
-      <section className="table-section list-section-panel user-management-section" aria-label="ユーザー一覧">
+      <section
+        ref={listAnchorRef}
+        className="table-section list-section-panel user-management-section"
+        aria-label="ユーザー一覧"
+      >
         <div className="list-section-inner">
           <ListSectionBar
             icon="bi-people-fill"
@@ -557,73 +700,87 @@ export default function UserManagementPage() {
             hideCount={loading}
           />
 
-          <form className="file-list-filter-form user-mgmt-filter-form" onSubmit={handleSearch}>
-            <div className="file-list-filter-row">
-              <div className="input-group file-list-search">
-                <span className="input-group-text">
-                  <i className="bi bi-search" aria-hidden="true" />
-                </span>
-                <input
-                  type="search"
-                  className="form-control"
-                  placeholder="ユーザー名 / 表示名 / メール / 社員ID・氏名"
-                  value={filterDraft.keyword}
-                  onChange={(e) => setFilterDraft((prev) => ({ ...prev, keyword: e.target.value }))}
-                  aria-label="キーワード検索"
-                />
-              </div>
-              <select
-                className="form-select file-list-filter-select"
-                value={filterDraft.role}
-                onChange={(e) => setFilterDraft((prev) => ({ ...prev, role: e.target.value }))}
-                aria-label="ロールで絞り込み"
-              >
-                <option value="">すべてのロール</option>
-                {USER_ROLE_OPTIONS.map((opt) => (
-                  <option key={opt.value} value={opt.value}>
-                    {opt.label}
-                  </option>
-                ))}
-              </select>
-              <select
-                className="form-select file-list-filter-select"
-                value={filterDraft.affiliationCompany}
-                onChange={(e) =>
-                  setFilterDraft((prev) => ({ ...prev, affiliationCompany: e.target.value }))
-                }
-                aria-label="所属会社で絞り込み"
-              >
-                <option value="">すべての会社</option>
-                {companyOptions.map((company) => (
-                  <option key={company} value={company}>
-                    {company}
-                  </option>
-                ))}
-              </select>
-              <select
-                className="form-select file-list-filter-select"
-                value={filterDraft.enabled}
-                onChange={(e) => setFilterDraft((prev) => ({ ...prev, enabled: e.target.value }))}
-                aria-label="状態で絞り込み"
-              >
-                <option value="">すべての状態</option>
-                <option value="true">有効</option>
-                <option value="false">無効</option>
-              </select>
-              <button type="submit" className="btn btn-primary app-btn file-list-filter-submit">
-                検索
-              </button>
-              {hasActiveFilters && (
-                <button
-                  type="button"
-                  className="btn btn-outline-secondary app-btn file-list-filter-clear"
-                  onClick={handleClearFilters}
+          <div className="user-mgmt-toolbar">
+            <form className="file-list-filter-form user-mgmt-filter-form" onSubmit={handleSearch}>
+              <div className="file-list-filter-row">
+                <div className="input-group file-list-search">
+                  <span className="input-group-text">
+                    <i className="bi bi-search" aria-hidden="true" />
+                  </span>
+                  <input
+                    type="search"
+                    className="form-control"
+                    placeholder="ユーザー名 / 表示名 / メール / 社員ID・氏名"
+                    value={filterDraft.keyword}
+                    onChange={(e) => setFilterDraft((prev) => ({ ...prev, keyword: e.target.value }))}
+                    aria-label="キーワード検索"
+                  />
+                </div>
+                <select
+                  className="form-select file-list-filter-select"
+                  value={filterDraft.role}
+                  onChange={(e) => setFilterDraft((prev) => ({ ...prev, role: e.target.value }))}
+                  aria-label="ロールで絞り込み"
                 >
-                  クリア
+                  <option value="">すべてのロール</option>
+                  {USER_ROLE_OPTIONS.map((opt) => (
+                    <option key={opt.value} value={opt.value}>
+                      {opt.label}
+                    </option>
+                  ))}
+                </select>
+                <select
+                  className="form-select file-list-filter-select"
+                  value={filterDraft.affiliationCompany}
+                  onChange={(e) =>
+                    setFilterDraft((prev) => ({ ...prev, affiliationCompany: e.target.value }))
+                  }
+                  aria-label="所属会社で絞り込み"
+                >
+                  <option value="">すべての会社</option>
+                  {companyOptions.map((company) => (
+                    <option key={company} value={company}>
+                      {company}
+                    </option>
+                  ))}
+                </select>
+                <select
+                  className="form-select file-list-filter-select"
+                  value={filterDraft.enabled}
+                  onChange={(e) => setFilterDraft((prev) => ({ ...prev, enabled: e.target.value }))}
+                  aria-label="状態で絞り込み"
+                >
+                  <option value="">すべての状態</option>
+                  <option value="true">有効</option>
+                  <option value="false">無効</option>
+                </select>
+                <button type="submit" className="btn btn-primary app-btn file-list-filter-submit">
+                  検索
                 </button>
-              )}
-            </div>
-          </form>
+                {hasActiveFilters && (
+                  <button
+                    type="button"
+                    className="btn btn-outline-secondary app-btn file-list-filter-clear"
+                    onClick={handleClearFilters}
+                  >
+                    クリア
+                  </button>
+                )}
+              </div>
+            </form>
+
+            {!loading && users.length > 0 && (
+              <UserListPagination
+                page={page}
+                totalPages={totalPages}
+                totalUsers={totalUsers}
+                pageSize={pageSize}
+                loading={loading}
+                onPageChange={handlePageChange}
+                onPageSizeChange={handlePageSizeChange}
+              />
+            )}
+          </div>
 
         {loading ? (
           <div className="page-state-panel">
@@ -642,57 +799,49 @@ export default function UserManagementPage() {
         ) : (
           <>
           <div className="user-mgmt-table-wrap user-mgmt-table-wrap-inset">
-            <table className="table table-hover align-middle mb-0 user-mgmt-table">
+            <table className="table table-hover align-middle mb-0 user-mgmt-table user-mgmt-table-compact">
               <thead>
                 <tr>
-                  <th>ユーザー名</th>
-                  <th>表示名</th>
-                  <th>メール</th>
-                  <th>ロール</th>
-                  <th>所属会社</th>
-                  <th>所属部門</th>
-                  <th>連携社員</th>
-                  <th>2FA</th>
-                  <th>状態</th>
-                  <th>操作</th>
+                  <th className="user-mgmt-col-user">ユーザー</th>
+                  <th className="user-mgmt-col-role">ロール</th>
+                  <th className="user-mgmt-col-org">所属</th>
+                  <th className="user-mgmt-col-employee">連携社員</th>
+                  <th className="user-mgmt-col-flag">2FA</th>
+                  <th className="user-mgmt-col-flag">状態</th>
+                  <th className="user-mgmt-col-actions">操作</th>
                 </tr>
               </thead>
               <tbody>
                 {users.map((user) => {
                   const isSelf = user.username === currentUser?.username;
+                  const showEmail =
+                    Boolean(user.email) &&
+                    user.email.trim().toLowerCase() !== user.username.trim().toLowerCase();
+                  const orgLine = [user.affiliationCompany, user.departmentName]
+                    .filter(Boolean)
+                    .join(' / ');
                   return (
                     <tr key={user.id} className={isSelf ? 'user-mgmt-row-self' : undefined}>
-                      <td>
-                        <div className="user-mgmt-user-cell">
-                          <div className="user-mgmt-user-card">
-                            <span className="user-mgmt-avatar" aria-hidden="true">
-                              {user.username.charAt(0).toUpperCase()}
-                            </span>
-                            <div className="user-mgmt-user-text">
-                              <span className="user-mgmt-username">{user.username}</span>
+                      <td className="user-mgmt-col-user">
+                        <div className="user-mgmt-user-cell user-mgmt-user-cell-start">
+                          <span className="user-mgmt-avatar" aria-hidden="true">
+                            {(user.displayName || user.username).charAt(0).toUpperCase()}
+                          </span>
+                          <div className="user-mgmt-user-text">
+                            <div className="user-mgmt-user-title-row">
+                              <span className="user-mgmt-display-name">
+                                {user.displayName || user.username}
+                              </span>
                               {isSelf && <span className="user-mgmt-self-tag">自分</span>}
                             </div>
+                            <span className="user-mgmt-username">{user.username}</span>
+                            {showEmail && (
+                              <span className="user-mgmt-email-sub">{user.email}</span>
+                            )}
                           </div>
                         </div>
                       </td>
-                      <td>
-                        <span className={user.displayName ? 'user-mgmt-display-name' : 'user-mgmt-empty'}>
-                          {user.displayName || '—'}
-                        </span>
-                      </td>
-                      <td>
-                        <span className={user.email ? 'user-mgmt-email' : 'user-mgmt-empty'}>
-                          {user.email ? (
-                            <>
-                              <i className="bi bi-envelope user-mgmt-email-icon" aria-hidden="true" />
-                              {user.email}
-                            </>
-                          ) : (
-                            '—'
-                          )}
-                        </span>
-                      </td>
-                      <td>
+                      <td className="user-mgmt-col-role">
                         <div className="user-mgmt-role-list">
                           {(user.assignments?.length
                             ? user.assignments
@@ -709,14 +858,14 @@ export default function UserManagementPage() {
                             >
                               <i className={`bi ${roleIcon(assignment.role)}`} aria-hidden="true" />
                               {roleLabel(assignment.role)}
-                              {assignment.primary ? '（本職）' : '（兼職）'}
+                              {assignment.primary ? '' : '・兼'}
                             </span>
                           ))}
                         </div>
                       </td>
-                      <td>
-                        <span className={user.affiliationCompany ? 'user-mgmt-dept' : 'user-mgmt-empty'}>
-                          {user.affiliationCompany || '—'}
+                      <td className="user-mgmt-col-org">
+                        <span className={orgLine ? 'user-mgmt-dept' : 'user-mgmt-empty'}>
+                          {orgLine || '—'}
                           {(user.assignments?.length ?? 0) > 1 && (
                             <span className="user-mgmt-self-tag ms-1">
                               +{user.assignments.length - 1}兼職
@@ -724,43 +873,32 @@ export default function UserManagementPage() {
                           )}
                         </span>
                       </td>
-                      <td>
-                        <span className={user.departmentName ? 'user-mgmt-dept' : 'user-mgmt-empty'}>
-                          {user.departmentName ? (
-                            <>
-                              <i className="bi bi-building user-mgmt-dept-icon" aria-hidden="true" />
-                              {user.departmentName}
-                            </>
-                          ) : (
-                            '—'
-                          )}
-                        </span>
-                      </td>
-                      <td>
+                      <td className="user-mgmt-col-employee">
                         <span className={user.employeeId ? 'user-mgmt-dept' : 'user-mgmt-empty'}>
                           {user.employeeId ? (
                             <>
-                              <i className="bi bi-person-badge user-mgmt-dept-icon" aria-hidden="true" />
-                              {user.employeeCode || '—'}
-                              {user.employeeName ? ` ${user.employeeName}` : ''}
+                              <span className="user-mgmt-emp-code">{user.employeeCode || '—'}</span>
+                              {user.employeeName ? (
+                                <span className="user-mgmt-emp-name"> {user.employeeName}</span>
+                              ) : null}
                             </>
                           ) : (
                             '—'
                           )}
                         </span>
                       </td>
-                      <td>
+                      <td className="user-mgmt-col-flag">
                         <span className={`user-mgmt-mfa ${user.totpEnabled ? 'is-enabled' : 'is-disabled'}`}>
                           {user.totpEnabled ? '有効' : '無効'}
                         </span>
                       </td>
-                      <td>
+                      <td className="user-mgmt-col-flag">
                         <span className={`user-mgmt-status ${user.enabled ? 'is-active' : 'is-inactive'}`}>
                           <span className="user-mgmt-status-dot" aria-hidden="true" />
                           {user.enabled ? '有効' : '無効'}
                         </span>
                       </td>
-                      <td>
+                      <td className="user-mgmt-col-actions">
                         <div className="user-mgmt-actions">
                           <button
                             type="button"
@@ -789,35 +927,15 @@ export default function UserManagementPage() {
               </tbody>
             </table>
           </div>
-          {totalUsers > 0 && (
-            <div className="user-mgmt-pagination" aria-label="ページネーション">
-              <span className="user-mgmt-pagination-meta">
-                全 {totalUsers} 件中 {(page - 1) * pageSize + 1}–
-                {Math.min(page * pageSize, totalUsers)} 件
-              </span>
-              <div className="user-mgmt-pagination-controls">
-                <button
-                  type="button"
-                  className="btn btn-outline-secondary btn-sm app-btn"
-                  disabled={page <= 1 || loading}
-                  onClick={() => setPage((prev) => Math.max(1, prev - 1))}
-                >
-                  前へ
-                </button>
-                <span className="user-mgmt-pagination-page">
-                  {page} / {totalPages}
-                </span>
-                <button
-                  type="button"
-                  className="btn btn-outline-secondary btn-sm app-btn"
-                  disabled={page >= totalPages || loading}
-                  onClick={() => setPage((prev) => Math.min(totalPages, prev + 1))}
-                >
-                  次へ
-                </button>
-              </div>
-            </div>
-          )}
+          <UserListPagination
+            page={page}
+            totalPages={totalPages}
+            totalUsers={totalUsers}
+            pageSize={pageSize}
+            loading={loading}
+            onPageChange={handlePageChange}
+            onPageSizeChange={handlePageSizeChange}
+          />
           </>
         )}
         </div>
