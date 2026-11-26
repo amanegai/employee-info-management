@@ -167,7 +167,17 @@ export const api = {
   updateEmployee: (id, body) =>
     request(`/employees/${id}`, { method: 'PUT', body: JSON.stringify(body) }),
   deleteEmployee: (id) => request(`/employees/${id}`, { method: 'DELETE' }),
-  listUsers: () => request('/admin/users'),
+  listUsers: (params = {}) => {
+    const q = new URLSearchParams();
+    if (params.keyword) q.set('keyword', params.keyword);
+    if (params.role) q.set('role', params.role);
+    if (params.affiliationCompany) q.set('affiliationCompany', params.affiliationCompany);
+    if (params.enabled === true || params.enabled === false) q.set('enabled', String(params.enabled));
+    if (params.page) q.set('page', String(params.page));
+    if (params.size) q.set('size', String(params.size));
+    const query = q.toString();
+    return request(`/admin/users${query ? `?${query}` : ''}`);
+  },
   importMasterEmployees: (file, dryRun = true) => importMasterFile('/admin/master/employees/import', file, dryRun),
   importMasterClients: (file, dryRun = true) => importMasterFile('/admin/master/clients/import', file, dryRun),
   createUser: (body) => request('/admin/users', { method: 'POST', body: JSON.stringify(body) }),

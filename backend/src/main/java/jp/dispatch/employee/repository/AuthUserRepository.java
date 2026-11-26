@@ -2,6 +2,7 @@ package jp.dispatch.employee.repository;
 
 import jp.dispatch.employee.auth.AppUserDetails;
 import jp.dispatch.employee.auth.UserAssignment;
+import jp.dispatch.employee.config.DatabaseDialect;
 import jp.dispatch.employee.dto.AuthUserAssignmentDto;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.stereotype.Repository;
@@ -16,9 +17,11 @@ import java.util.Set;
 public class AuthUserRepository {
 
     private final JdbcTemplate jdbc;
+    private final DatabaseDialect dialect;
 
-    public AuthUserRepository(JdbcTemplate jdbc) {
+    public AuthUserRepository(JdbcTemplate jdbc, DatabaseDialect dialect) {
         this.jdbc = jdbc;
+        this.dialect = dialect;
     }
 
     public long countUsers() {
@@ -254,6 +257,105 @@ public class AuthUserRepository {
                 """,
                 (rs, rowNum) -> mapUserRecord(rs)
         );
+    }
+
+    public long countUsers(
+            String keyword,
+            String role,
+            String affiliationCompany,
+            Boolean enabled
+    ) {
+        StringBuilder sql = new StringBuilder(
+                """
+                SELECT COUNT(DISTINCT u.id)
+                FROM auth_user u
+                LEFT JOIN department d ON d.id = u.department_id
+                LEFT JOIN employee e ON e.id = u.employee_id
+                """
+        );
+        List<Object> params = new ArrayList<>();
+        appendUserSearchFilters(sql, params, keyword, role, affiliationCompany, enabled);
+        Long count = jdbc.queryForObject(sql.toString(), Long.class, params.toArray());
+        return count != null ? count : 0L;
+    }
+
+    public List<AuthUserRecord> searchUsers(
+            String keyword,
+            String role,
+            String affiliationCompany,
+            Boolean enabled,
+            int limit,
+            int offset
+    ) {
+        StringBuilder sql = new StringBuilder(
+                """
+                SELECT u.id, u.username, u.display_name, u.email, u.department_id, d.name AS department_name,
+                       u.affiliation_company,
+                       u.employee_id, e.employee_code, e.name AS employee_name, u.enabled,
+                       COALESCE(u.totp_enabled, 0) AS totp_enabled
+                FROM auth_user u
+                LEFT JOIN department d ON d.id = u.department_id
+                LEFT JOIN employee e ON e.id = u.employee_id
+                """
+        );
+        List<Object> params = new ArrayList<>();
+        appendUserSearchFilters(sql, params, keyword, role, affiliationCompany, enabled);
+        sql.append(" ORDER BY u.username LIMIT ? OFFSET ?");
+        params.add(limit);
+        params.add(offset);
+        return jdbc.query(sql.toString(), (rs, rowNum) -> mapUserRecord(rs), params.toArray());
+    }
+
+    private void appendUserSearchFilters(
+            StringBuilder sql,
+            List<Object> params,
+            String keyword,
+            String role,
+            String affiliationCompany,
+            Boolean enabled
+    ) {
+        sql.append(" WHERE 1=1");
+        if (keyword != null && !keyword.isBlank()) {
+            String pattern = "%" + keyword.trim() + "%";
+            sql.append(" AND (")
+                    .append(dialect.likeIgnoreCase("u.username"))
+                    .append(" OR ")
+                    .append(dialect.likeIgnoreCase("COALESCE(u.display_name, '')"))
+                    .append(" OR ")
+                    .append(dialect.likeIgnoreCase("COALESCE(u.email, '')"))
+                    .append(" OR ")
+                    .append(dialect.likeIgnoreCase("COALESCE(d.name, '')"))
+                    .append(" OR ")
+                    .append(dialect.likeIgnoreCase("COALESCE(e.employee_code, '')"))
+                    .append(" OR ")
+                    .append(dialect.likeIgnoreCase("COALESCE(e.name, '')"))
+                    .append(")");
+            params.add(pattern);
+            params.add(pattern);
+            params.add(pattern);
+            params.add(pattern);
+            params.add(pattern);
+            params.add(pattern);
+        }
+        if (role != null && !role.isBlank()) {
+            sql.append(
+                    """
+                     AND EXISTS (
+                        SELECT 1 FROM auth_user_role r
+                        WHERE r.user_id = u.id AND r.role = ?
+                     )
+                    """
+            );
+            params.add(role.trim());
+        }
+        if (affiliationCompany != null && !affiliationCompany.isBlank()) {
+            sql.append(" AND u.affiliation_company = ?");
+            params.add(affiliationCompany.trim());
+        }
+        if (enabled != null) {
+            sql.append(" AND u.enabled = ?");
+            params.add(enabled ? 1 : 0);
+        }
     }
 
     public Optional<AuthUserRecord> findUserById(long id) {
