@@ -246,8 +246,9 @@ public class BpHelpNotificationService {
     }
 
     private void requireViewProjectPermission() {
-        if (!securityService.canViewProjectFeatures()) {
-            throw new ResponseStatusException(HttpStatus.FORBIDDEN, "案件機能の閲覧権限がありません");
+        // 通知一覧は人事も利用（入社日未入力リマインド等）
+        if (!securityService.canViewNotifications()) {
+            throw new ResponseStatusException(HttpStatus.FORBIDDEN, "通知の閲覧権限がありません");
         }
     }
 

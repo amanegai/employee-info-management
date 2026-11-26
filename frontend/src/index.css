@@ -17520,12 +17520,6 @@ body.page-guide-is-open {
   --mr-shadow: 0 12px 40px rgba(15, 23, 42, 0.07);
 }
 
-.meeting-room-page-inner {
-  max-width: 1320px;
-  margin: 0 auto;
-  padding: clamp(1.25rem, 3vw, 2rem) clamp(1.25rem, 4vw, 3rem) 1.75rem;
-}
-
 .meeting-room-hero {
   background:
     radial-gradient(circle at 100% 0%, rgba(79, 70, 229, 0.08) 0%, transparent 42%),
@@ -17618,7 +17612,7 @@ body.page-guide-is-open {
 
 .meeting-room-cards {
   display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(9.5rem, 1fr));
+  grid-template-columns: repeat(auto-fill, minmax(10rem, 12rem));
   gap: 0.75rem;
 }
 
@@ -18114,6 +18108,7 @@ body.page-guide-is-open {
 }
 
 .meeting-room-calendar-inner {
+  width: 100%;
   border-radius: var(--mr-radius-md);
   overflow: hidden;
   box-shadow:
@@ -18145,6 +18140,7 @@ body.page-guide-is-open {
 .meeting-room-calendar {
   display: grid;
   position: relative;
+  width: 100%;
   min-width: 52rem;
   gap: 0;
   background: #fff;
@@ -18864,11 +18860,6 @@ body.page-guide-is-open {
 }
 
 @media (max-width: 767.98px) {
-  .meeting-room-page-inner {
-    padding-left: 1rem;
-    padding-right: 1rem;
-  }
-
   .meeting-room-calendar {
     min-width: 44rem;
   }
@@ -20171,7 +20162,7 @@ body.page-guide-is-open {
 }
 
 
-/* —š—ğ‘ƒCƒ“ƒ|[ƒgŠm”FEˆê——‚Ìl«‰» */
+/* ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½Cï¿½ï¿½ï¿½|ï¿½[ï¿½gï¿½mï¿½Fï¿½Eï¿½ê——ï¿½Ìlï¿½ï¿½ï¿½ï¿½ */
 .employee-quick-search .input-group-text {
   border-right: 0;
 }

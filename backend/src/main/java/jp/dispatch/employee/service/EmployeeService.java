@@ -12,17 +12,23 @@ import jp.dispatch.employee.model.AffiliationCompanies;
 import jp.dispatch.employee.model.AssignmentRoleCodes;
 import jp.dispatch.employee.model.EmployeeCodeRules;
 import jp.dispatch.employee.model.MasterData;
+import jp.dispatch.employee.model.NotificationTypes;
 import jp.dispatch.employee.model.SummaryFilter;
+import jp.dispatch.employee.repository.AppNotificationRepository;
+import jp.dispatch.employee.repository.AuthUserRepository;
 import jp.dispatch.employee.repository.EmployeeDetailRepository;
 import jp.dispatch.employee.repository.EmployeeRepository;
 import jp.dispatch.employee.repository.FileAttachmentRepository;
 import jp.dispatch.employee.repository.RelatedDataCleanupRepository;
+import jp.dispatch.employee.dto.EmployeeDetailDto.HrDto;
+import jp.dispatch.employee.dto.EmployeeDetailDto.SalaryDto;
 import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.web.server.ResponseStatusException;
 
 import java.time.LocalDate;
+import java.time.LocalDateTime;
 import java.time.ZoneId;
 import java.time.format.DateTimeFormatter;
 import java.util.ArrayList;
@@ -40,6 +46,7 @@ import java.util.Set;
 public class EmployeeService {
 
     private static final ZoneId TOKYO = ZoneId.of("Asia/Tokyo");
+    private static final DateTimeFormatter TIMESTAMP = DateTimeFormatter.ofPattern("yyyy-MM-dd'T'HH:mm:ss");
     private static final Set<String> RESIGNATION_WORK_STATUSES = Set.of("退職予定", "退職");
 
     private final EmployeeRepository repository;
@@ -52,6 +59,8 @@ public class EmployeeService {
     private final AuditLogService auditLogService;
     private final ResumeExcelExportService resumeExcelExportService;
     private final PaidLeaveBalanceService paidLeaveBalanceService;
+    private final AppNotificationRepository notificationRepository;
+    private final AuthUserRepository authUserRepository;
 
     public EmployeeService(
             EmployeeRepository repository,
@@ -63,7 +72,9 @@ public class EmployeeService {
             DataScopeService dataScopeService,
             AuditLogService auditLogService,
             ResumeExcelExportService resumeExcelExportService,
-            PaidLeaveBalanceService paidLeaveBalanceService
+            PaidLeaveBalanceService paidLeaveBalanceService,
+            AppNotificationRepository notificationRepository,
+            AuthUserRepository authUserRepository
     ) {
         this.repository = repository;
         this.detailRepository = detailRepository;
@@ -75,6 +86,8 @@ public class EmployeeService {
         this.auditLogService = auditLogService;
         this.resumeExcelExportService = resumeExcelExportService;
         this.paidLeaveBalanceService = paidLeaveBalanceService;
+        this.notificationRepository = notificationRepository;
+        this.authUserRepository = authUserRepository;
     }
 
     public SummaryResponseDto getSummary() {
@@ -401,6 +414,7 @@ public class EmployeeService {
         if (writeAudit) {
             auditLogService.log(AuditAction.EMPLOYEE_CREATE, "employee", String.valueOf(id), req.name());
         }
+        notifyHrIfHireDateMissing(id, employeeCode, req.name(), normalized.hr());
         return getById(id);
     }
 
@@ -795,12 +809,44 @@ public class EmployeeService {
         if (securityService.canWriteSalary()) {
             return request;
         }
+        // 営業等: 給与・人事の大半は不可。入社日のみ入力・更新を許可する
+        String requestedHireDate = request.hr() != null ? request.hr().hireDate() : null;
         if (employeeId == null) {
-            return request.withoutSalaryAndHr();
+            return request.withSalaryAndHr(null, EmployeeSaveRequest.hrWithHireDateOnly(requestedHireDate));
         }
         EmployeeDetailDto existing = detailRepository.findDetail(employeeId)
                 .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "社員が見つかりません"));
-        return request.withSalaryAndHr(existing.salary(), existing.hr());
+        SalaryDto salary = existing.salary();
+        HrDto hr = EmployeeSaveRequest.copyHrWithHireDate(existing.hr(), requestedHireDate);
+        return request.withSalaryAndHr(salary, hr);
+    }
+
+    private void notifyHrIfHireDateMissing(long employeeId, String employeeCode, String name, HrDto hr) {
+        if (hr != null && hr.hireDate() != null && !hr.hireDate().isBlank()) {
+            return;
+        }
+        Long actorId = currentUserIdOrNull();
+        String now = LocalDateTime.now(TOKYO).format(TIMESTAMP);
+        String displayName = name != null && !name.isBlank() ? name : "（氏名未設定）";
+        String code = employeeCode != null && !employeeCode.isBlank() ? employeeCode : "—";
+        String title = "入社日未入力の社員が登録されました";
+        String body = displayName + "（" + code + "）の入社日が未入力です。補充してください。";
+        String linkPath = "/employees/" + employeeId + "/edit";
+        for (Long recipientId : authUserRepository.findHrNotificationRecipientIds()) {
+            if (actorId != null && actorId.equals(recipientId)) {
+                continue;
+            }
+            notificationRepository.insert(
+                    recipientId,
+                    NotificationTypes.EMPLOYEE_HIRE_DATE_MISSING,
+                    title,
+                    body,
+                    linkPath,
+                    null,
+                    actorId,
+                    now
+            );
+        }
     }
 
     private void requireWritePermission() {

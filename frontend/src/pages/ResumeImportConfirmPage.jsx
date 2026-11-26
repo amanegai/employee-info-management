@@ -7,6 +7,7 @@ import { useAuth } from '../context/AuthContext';
 import { useAppMessage } from '../context/MessageContext';
 import {
   canWrite,
+  canWriteSalary,
   filterDepartmentsByScope,
 } from '../auth';
 import {
@@ -78,6 +79,8 @@ export default function ResumeImportConfirmPage() {
   const [batchHireDate, setBatchHireDate] = useState('');
   const [loading, setLoading] = useState(true);
   const [registering, setRegistering] = useState(false);
+  /** 人事・管理者等は入社日必須。営業は任意（わかる場合のみ） */
+  const hireDateRequired = canWriteSalary(user);
 
   // ビットクロスの事業部単体所属を許可するため、親部門も選択肢に含める
   const departments = useMemo(
@@ -289,7 +292,7 @@ export default function ResumeImportConfirmPage() {
     if (!row.affiliationCompany) return '所属会社を選択してください';
     if (!row.employeeType) return '社員種別を選択してください';
     if (!row.departmentId) return '所属部門を選択してください';
-    if (!row.hireDate) return '入社日を入力してください';
+    if (hireDateRequired && !row.hireDate) return '入社日を入力してください';
     if (!String(row.employeeCode || '').trim()) return '社員IDを入力してください';
     return row.codeError || row.registerError || '';
   }
@@ -716,12 +719,17 @@ export default function ResumeImportConfirmPage() {
                   </div>
                   <div className="resume-import-field">
                     <label className="form-label small mb-1" htmlFor={`hire-${row.localId}`}>
-                      入社日 <span className="text-danger">*</span>
+                      入社日
+                      {hireDateRequired ? <span className="text-danger"> *</span> : null}
                     </label>
                     <input
                       id={`hire-${row.localId}`}
                       type="date"
-                      className={`form-control form-control-sm${!row.hireDate && row.selected && !row.registered ? ' is-invalid' : ''}`}
+                      className={`form-control form-control-sm${
+                        hireDateRequired && !row.hireDate && row.selected && !row.registered
+                          ? ' is-invalid'
+                          : ''
+                      }`}
                       value={row.hireDate}
                       disabled={disabled}
                       onChange={(e) =>

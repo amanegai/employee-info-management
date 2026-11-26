@@ -313,8 +313,7 @@ export default function MeetingRoomCalendarPage() {
   }
 
   return (
-    <div className="page-content meeting-room-page">
-      <div className="meeting-room-page-inner">
+    <div className="container-fluid py-4 px-3 px-lg-5 list-page meeting-room-page">
         <section className="meeting-room-hero">
           <div className="meeting-room-hero-top">
             <div className="meeting-room-hero-brand">
@@ -564,7 +563,6 @@ export default function MeetingRoomCalendarPage() {
         />
 
         <AppFooter />
-      </div>
     </div>
   );
 }
