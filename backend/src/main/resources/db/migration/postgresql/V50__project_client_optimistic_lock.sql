@@ -1,0 +1,6 @@
+-- 案件・取引先の楽観ロック
+ALTER TABLE dispatch_project
+    ADD COLUMN IF NOT EXISTS version INTEGER NOT NULL DEFAULT 1;
+
+ALTER TABLE dispatch_client
+    ADD COLUMN IF NOT EXISTS version INTEGER NOT NULL DEFAULT 1;

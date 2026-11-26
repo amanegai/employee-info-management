@@ -36,6 +36,7 @@ public record DispatchProjectDto(
         Integer pendingReferralCount,
         String createdAt,
         String updatedAt,
+        int version,
         List<ProjectCandidateDto> candidates
 ) {
 }

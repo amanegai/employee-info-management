@@ -18,6 +18,7 @@ public record DispatchProjectSaveRequest(
         String interviewRounds,
         Long ownerUserId,
         String notes,
-        String periodNotes
+        String periodNotes,
+        Integer version
 ) {
 }

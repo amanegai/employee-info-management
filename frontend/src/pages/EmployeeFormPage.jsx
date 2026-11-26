@@ -199,12 +199,30 @@ export default function EmployeeFormPage({ mode }) {
         });
       }
     } catch (e) {
-      const conflict =
-        e instanceof ApiError && e.status === 409
-          ? '他のユーザーにより更新されています。最新データを再読み込みしてから保存してください'
-          : e.message;
-      showMessage(conflict, 'danger');
-      setFormError(conflict);
+      const isConflict = e instanceof ApiError && e.status === 409;
+      if (isConflict && isEdit) {
+        // 楽観ロック衝突: 入力内容は残し、最新 version だけ取り直して再保存可能にする
+        try {
+          const detail = await api.getEmployeeDetail(id);
+          const nextForm = detailToForm(detail);
+          setForm((prev) => ({
+            ...prev,
+            version: nextForm.version,
+          }));
+          const retryHint =
+            '保存時に競合しました。入力内容はそのままです。もう一度「更新」を押してください。';
+          showMessage(retryHint, 'warning');
+          setFormError(retryHint);
+        } catch {
+          const conflict =
+            '保存が競合しました。画面を再読み込みしてからもう一度保存してください';
+          showMessage(conflict, 'danger');
+          setFormError(conflict);
+        }
+      } else {
+        showMessage(e.message, 'danger');
+        setFormError(e.message);
+      }
     } finally {
       setSaving(false);
     }

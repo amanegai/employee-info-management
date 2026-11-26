@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { Link, useNavigate, useParams } from 'react-router-dom';
-import { api } from '../api';
+import { ApiError, api } from '../api';
 import AppFooter from '../components/AppFooter';
 import PageGuideHelpButton from '../components/guide/PageGuideHelpButton';
 import ListSectionBar from '../components/ListSectionBar';
@@ -46,6 +46,7 @@ const EMPTY_FORM = {
   clientRank: '',
   contractStatus: '商談中',
   notes: '',
+  version: null,
   clientContacts: [],
   internalContacts: [],
 };
@@ -54,6 +55,7 @@ function clientToForm(client) {
   const accounting = resolveAccountingFields(client);
   return {
     name: client.name || '',
+    version: client.version != null ? Number(client.version) : null,
     postalCode: client.postalCode || '',
     address: client.address || '',
     phone: client.phone || '',
@@ -136,6 +138,7 @@ function buildPayload(form) {
     clientRank: form.clientRank || null,
     contractStatus: form.contractStatus,
     notes: form.notes.trim() || null,
+    version: form.version != null ? Number(form.version) : null,
     clientContacts: form.clientContacts
       .filter((row) => row.contactName.trim())
       .map((row, index) => ({
@@ -269,7 +272,27 @@ export default function ClientFormPage({ mode = 'create' }) {
         navigate(`/clients/${created.id}`);
       }
     } catch (e) {
-      showMessage(e.message || '保存に失敗しました', 'danger');
+      const isConflict = e instanceof ApiError && e.status === 409;
+      if (isConflict && mode === 'edit' && id) {
+        try {
+          const client = await api.getClient(id);
+          setForm((prev) => ({
+            ...prev,
+            version: client.version != null ? Number(client.version) : null,
+          }));
+          showMessage(
+            '保存時に競合しました。入力内容はそのままです。もう一度「保存」を押してください。',
+            'warning'
+          );
+        } catch {
+          showMessage(
+            '保存が競合しました。画面を再読み込みしてからもう一度保存してください',
+            'danger'
+          );
+        }
+      } else {
+        showMessage(e.message || '保存に失敗しました', 'danger');
+      }
     } finally {
       savingRef.current = false;
       setSaving(false);

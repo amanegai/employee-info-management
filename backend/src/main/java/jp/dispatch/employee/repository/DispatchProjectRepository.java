@@ -34,7 +34,7 @@ public class DispatchProjectRepository {
                        req.display_name AS bp_help_requester_name, p.bp_help_note, p.bp_help_slots_needed,
                        p.created_by, creator.display_name AS created_by_name,
                        NULL::integer AS pending_referral_count,
-                       p.created_at, p.updated_at
+                       COALESCE(p.version, 1) AS version, p.created_at, p.updated_at
                 FROM dispatch_project p
                 LEFT JOIN auth_user au ON au.id = p.owner_user_id
                 LEFT JOIN auth_user req ON req.id = p.bp_help_requested_by
@@ -76,7 +76,7 @@ public class DispatchProjectRepository {
                        req.display_name AS bp_help_requester_name, p.bp_help_note, p.bp_help_slots_needed,
                        p.created_by, creator.display_name AS created_by_name,
                        NULL::integer AS pending_referral_count,
-                       p.created_at, p.updated_at
+                       COALESCE(p.version, 1) AS version, p.created_at, p.updated_at
                 FROM dispatch_project p
                 LEFT JOIN auth_user au ON au.id = p.owner_user_id
                 LEFT JOIN auth_user req ON req.id = p.bp_help_requested_by
@@ -104,7 +104,7 @@ public class DispatchProjectRepository {
                        p.created_by, creator.display_name AS created_by_name,
                        (SELECT COUNT(*)::integer FROM bp_help_referral r
                          WHERE r.project_id = p.id AND r.status = 'PENDING') AS pending_referral_count,
-                       p.created_at, p.updated_at
+                       COALESCE(p.version, 1) AS version, p.created_at, p.updated_at
                 FROM dispatch_project p
                 LEFT JOIN auth_user au ON au.id = p.owner_user_id
                 LEFT JOIN auth_user req ON req.id = p.bp_help_requested_by
@@ -273,7 +273,7 @@ public class DispatchProjectRepository {
                        p.created_by, creator.display_name AS created_by_name,
                        (SELECT COUNT(*)::integer FROM bp_help_referral r
                          WHERE r.project_id = p.id AND r.status = 'PENDING') AS pending_referral_count,
-                       p.created_at, p.updated_at
+                       COALESCE(p.version, 1) AS version, p.created_at, p.updated_at
                 FROM dispatch_project p
                 LEFT JOIN auth_user au ON au.id = p.owner_user_id
                 LEFT JOIN auth_user req ON req.id = p.bp_help_requested_by
@@ -407,7 +407,8 @@ public class DispatchProjectRepository {
         return JdbcGeneratedKeySupport.requireId(keyHolder, "案件の作成に失敗しました");
     }
 
-    public void update(
+    /** @return true if updated; false if version conflict or missing row */
+    public boolean updateOptimistic(
             long id,
             Long clientId,
             String clientName,
@@ -427,16 +428,19 @@ public class DispatchProjectRepository {
             Long ownerUserId,
             String notes,
             String periodNotes,
-            String now
+            String now,
+            int expectedVersion
     ) {
-        jdbc.update(
+        int rows = jdbc.update(
                 """
                 UPDATE dispatch_project
                 SET client_id = ?, client_name = ?, project_name = ?, project_text = ?, required_skills = ?,
                     optional_skills = ?, billing_unit_price = ?, billing_price_label = ?,
                     work_location = ?, expected_start_date = ?, expected_end_date = ?,
-                    headcount_required = ?, headcount_unlimited = ?, project_role = ?, interview_rounds = ?, owner_user_id = ?, notes = ?, period_notes = ?, updated_at = ?
-                WHERE id = ?
+                    headcount_required = ?, headcount_unlimited = ?, project_role = ?, interview_rounds = ?,
+                    owner_user_id = ?, notes = ?, period_notes = ?,
+                    version = version + 1, updated_at = ?
+                WHERE id = ? AND version = ?
                 """,
                 clientId,
                 clientName,
@@ -457,8 +461,10 @@ public class DispatchProjectRepository {
                 notes,
                 periodNotes,
                 now,
-                id
+                id,
+                expectedVersion
         );
+        return rows > 0;
     }
 
     public void updateStatus(long id, String status, String notes, String now) {
@@ -551,6 +557,7 @@ public class DispatchProjectRepository {
                 readNullableInteger(rs, "pending_referral_count"),
                 rs.getString("created_at"),
                 rs.getString("updated_at"),
+                rs.getInt("version"),
                 List.of()
         );
     }

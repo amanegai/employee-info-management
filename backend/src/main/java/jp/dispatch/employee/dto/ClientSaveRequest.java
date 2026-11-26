@@ -34,6 +34,7 @@ public record ClientSaveRequest(
         String clientRank,
         String contractStatus,
         String notes,
+        Integer version,
         List<ClientContactDto> clientContacts,
         List<ClientInternalContactDto> internalContacts
 ) {

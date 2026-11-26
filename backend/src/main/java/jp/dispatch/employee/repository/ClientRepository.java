@@ -148,6 +148,7 @@ public class ClientRepository {
                        c.accounting_contact_phone, c.accounting_contact_email,
                        c.corporate_number, c.credit_info,
                        c.credit_limit, c.client_rank, c.contract_status, c.notes, c.created_at, c.updated_at,
+                       COALESCE(c.version, 1) AS version,
                        (
                            SELECT COUNT(*)::int
                            FROM dispatch_project p
@@ -199,6 +200,7 @@ public class ClientRepository {
                 base.notes(),
                 base.createdAt(),
                 base.updatedAt(),
+                base.version(),
                 base.relatedProjectCount(),
                 findClientContacts(id),
                 findInternalContacts(id)
@@ -242,6 +244,7 @@ public class ClientRepository {
                 rs.getString("notes"),
                 rs.getString("created_at"),
                 rs.getString("updated_at"),
+                rs.getInt("version"),
                 rs.getInt("related_project_count"),
                 List.of(),
                 List.of()
@@ -417,7 +420,8 @@ public class ClientRepository {
         return JdbcGeneratedKeySupport.requireId(keyHolder, "取引先の登録に失敗しました");
     }
 
-    public boolean update(long id, ClientSaveRequest request, String location, String updatedAt) {
+    /** @return true if updated; false if version conflict or missing row */
+    public boolean updateOptimistic(long id, ClientSaveRequest request, String location, String updatedAt, int expectedVersion) {
         int updated = jdbc.update(
                 """
                 UPDATE dispatch_client SET
@@ -430,8 +434,8 @@ public class ClientRepository {
                     accounting_contact_phone = ?, accounting_contact_email = ?,
                     corporate_number = ?,
                     credit_info = ?, credit_limit = ?, client_rank = ?, contract_status = ?, notes = ?,
-                    updated_at = ?
-                WHERE id = ? AND deleted_at IS NULL
+                    version = version + 1, updated_at = ?
+                WHERE id = ? AND deleted_at IS NULL AND version = ?
                 """,
                 request.name().trim(),
                 location,
@@ -466,7 +470,8 @@ public class ClientRepository {
                         ? request.contractStatus().trim() : "商談中",
                 trimToNull(request.notes()),
                 updatedAt,
-                id
+                id,
+                expectedVersion
         );
         return updated > 0;
     }
