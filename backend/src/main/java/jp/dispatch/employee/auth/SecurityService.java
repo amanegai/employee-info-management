@@ -59,7 +59,7 @@ public class SecurityService {
         );
     }
 
-    /** 給与・人事情報の編集（営業は閲覧のみ） */
+    /** 給与・人事情報の編集（営業は給与不可。入社日のみ EmployeeService 側で許可） */
     public boolean canWriteSalary() {
         return hasAnyRole(
                 AuthRoles.ADMIN,
@@ -94,6 +94,11 @@ public class SecurityService {
     /** 案件・配属の閲覧（人事・一般社員は対象外） */
     public boolean canViewProjectFeatures() {
         return hasOperationalRole() && !hasRole(AuthRoles.HR);
+    }
+
+    /** システム通知の閲覧（人事含む業務ロール） */
+    public boolean canViewNotifications() {
+        return hasOperationalRole();
     }
 
     /** 案件・配属・候補者の編集（人事は対象外） */

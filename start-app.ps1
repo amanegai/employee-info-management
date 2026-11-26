@@ -65,8 +65,15 @@ $javaExe = Resolve-JavaExe
 $srcMarker = Get-ChildItem -Path "src\main\java", "src\main\resources" -Recurse -File -ErrorAction SilentlyContinue |
     Sort-Object LastWriteTime -Descending |
     Select-Object -First 1
+$frontendDistMarker = Get-ChildItem -Path "$Root\frontend\dist" -Recurse -File -ErrorAction SilentlyContinue |
+    Sort-Object LastWriteTime -Descending |
+    Select-Object -First 1
 $jarNeedsRebuild = -not (Test-Path $jar) -or (Get-Item $jar).Length -lt 10MB
 if (-not $jarNeedsRebuild -and $srcMarker -and $srcMarker.LastWriteTime -gt (Get-Item $jar).LastWriteTime) {
+    $jarNeedsRebuild = $true
+}
+# フロントのみ更新した場合も JAR に再同梱する
+if (-not $jarNeedsRebuild -and $frontendDistMarker -and $frontendDistMarker.LastWriteTime -gt (Get-Item $jar).LastWriteTime) {
     $jarNeedsRebuild = $true
 }
 

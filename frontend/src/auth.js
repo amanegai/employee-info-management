@@ -14,7 +14,7 @@ export function canViewSalary(user) {
   );
 }
 
-/** 給与・人事情報の編集（営業は閲覧のみ） */
+/** 給与・人事情報の編集（営業は給与不可。入社日のみ別途許可） */
 export function canWriteSalary(user) {
   return (
     hasRole(user, 'ADMIN') ||
@@ -22,6 +22,11 @@ export function canWriteSalary(user) {
     hasRole(user, 'DIVISION_HEAD') ||
     hasRole(user, 'DEPT_HEAD')
   );
+}
+
+/** 入社日の入力（営業含む登録権限者） */
+export function canWriteHireDate(user) {
+  return canWrite(user);
 }
 
 /** 社員情報の登録・編集（案件・配属とは別） */
@@ -54,6 +59,11 @@ export function canViewEmployeeDirectory(user) {
 /** 案件・配属の閲覧（人事・一般社員は対象外） */
 export function canViewProjectFeatures(user) {
   return hasOperationalRole(user) && !hasRole(user, 'HR');
+}
+
+/** システム通知の閲覧（人事含む業務ロール） */
+export function canViewNotifications(user) {
+  return hasOperationalRole(user);
 }
 
 /** 案件・配属・候補者の編集（人事は対象外） */

@@ -141,4 +141,33 @@ public record EmployeeSaveRequest(
                 version
         );
     }
+
+    /** 給与は触れず、人事のうち入社日のみ反映する（営業向け） */
+    public static HrDto hrWithHireDateOnly(String hireDate) {
+        String normalized = hireDate == null || hireDate.isBlank() ? null : hireDate.trim();
+        if (normalized == null) {
+            return null;
+        }
+        return new HrDto(normalized, null, null, null, null, null, null, null, null, null, null);
+    }
+
+    public static HrDto copyHrWithHireDate(HrDto existing, String hireDate) {
+        String normalized = hireDate == null || hireDate.isBlank() ? null : hireDate.trim();
+        if (existing == null) {
+            return hrWithHireDateOnly(normalized);
+        }
+        return new HrDto(
+                normalized,
+                existing.resignationDate(),
+                existing.contractStartDate(),
+                existing.contractEndDate(),
+                existing.socialInsuranceStatus(),
+                existing.employmentInsuranceNo(),
+                existing.pensionNo(),
+                existing.emergencyContactName(),
+                existing.emergencyContactPhone(),
+                existing.emergencyContactRelation(),
+                existing.paidLeaveStartDate()
+        );
+    }
 }

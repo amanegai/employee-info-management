@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { api } from '../api';
-import { canViewProjectFeatures } from '../auth';
+import { canViewNotifications } from '../auth';
 import { useAuth } from '../context/AuthContext';
 
 const POLL_MS = 20000;
@@ -16,6 +16,7 @@ const TYPE_ICONS = {
   BP_HELP_REFERRAL_HIRED: { icon: 'bi-award-fill', tone: 'green' },
   BP_HELP_REFERRAL_CLOSED: { icon: 'bi-archive-fill', tone: 'slate' },
   PROJECT_FILLED_CLOSE_REMIND: { icon: 'bi-flag-fill', tone: 'amber' },
+  EMPLOYEE_HIRE_DATE_MISSING: { icon: 'bi-calendar-x-fill', tone: 'amber' },
 };
 
 function typeVisual(type) {
@@ -50,7 +51,7 @@ export default function NotificationBell() {
   const [loading, setLoading] = useState(false);
   const panelRef = useRef(null);
 
-  const canView = canViewProjectFeatures(user);
+  const canView = canViewNotifications(user);
 
   const refreshCount = useCallback(async () => {
     if (!canView) {

@@ -454,6 +454,21 @@ public class AuthUserRepository {
         );
     }
 
+    /** 入社日未入力など人事補充が必要な通知の宛先 */
+    public List<Long> findHrNotificationRecipientIds() {
+        return jdbc.query(
+                """
+                SELECT DISTINCT u.id
+                FROM auth_user u
+                JOIN auth_user_role r ON r.user_id = u.id
+                WHERE u.enabled = 1
+                  AND r.role IN ('ADMIN', 'HR')
+                ORDER BY u.id
+                """,
+                (rs, rowNum) -> rs.getLong("id")
+        );
+    }
+
     public record AuthUserRecord(
             long id,
             String username,
