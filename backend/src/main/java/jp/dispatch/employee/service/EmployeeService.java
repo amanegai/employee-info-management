@@ -694,7 +694,7 @@ public class EmployeeService {
         if (codeError != null) {
             throw new ResponseStatusException(HttpStatus.BAD_REQUEST, codeError);
         }
-        assertNoIdentityDuplicate(req.name(), personal, excludeId);
+        assertNoIdentityDuplicate(req.name(), personal, company, excludeId);
     }
 
     private void validateUpdateEmployee(EmployeeDto existing, EmployeeRequest req, PersonalDto personal) {
@@ -720,7 +720,7 @@ public class EmployeeService {
                 throw new ResponseStatusException(HttpStatus.BAD_REQUEST, codeError);
             }
         }
-        assertNoIdentityDuplicate(req.name(), personal, existing.id());
+        assertNoIdentityDuplicate(req.name(), personal, company, existing.id());
     }
 
     private void ensureBitcrossDepartmentStyle(String affiliationCompany, String departmentName) {
@@ -748,14 +748,20 @@ public class EmployeeService {
         }
     }
 
-    private void assertNoIdentityDuplicate(String name, PersonalDto personal, Long excludeId) {
+    private void assertNoIdentityDuplicate(
+            String name,
+            PersonalDto personal,
+            String affiliationCompany,
+            Long excludeId
+    ) {
         String gender = personal == null ? "" : nullToEmpty(personal.gender());
         String birthDate = personal == null ? "" : nullToEmpty(personal.birthDate());
         String arrival = personal == null ? "" : nullToEmpty(personal.japanArrivalDate());
-        if (repository.existsIdentityMatch(name, gender, birthDate, arrival, excludeId)) {
+        String company = AffiliationCompanies.normalize(affiliationCompany);
+        if (repository.existsIdentityMatch(name, gender, birthDate, arrival, company, excludeId)) {
             throw new ResponseStatusException(
                     HttpStatus.CONFLICT,
-                    "姓名・性別・生年月日・来日年月が一致する社員が既に登録されています"
+                    "同一所属会社内に、姓名・性別・生年月日・来日年月が一致する社員が既に登録されています"
             );
         }
     }

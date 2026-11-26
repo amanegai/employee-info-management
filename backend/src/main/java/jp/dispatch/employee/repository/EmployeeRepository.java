@@ -595,12 +595,14 @@ public class EmployeeRepository {
             String gender,
             String birthDate,
             String japanArrivalDate,
+            String affiliationCompany,
             Long excludeId
     ) {
         String n = name == null ? "" : name.trim();
         String g = gender == null ? "" : gender.trim();
         String b = birthDate == null ? "" : birthDate.trim();
         String j = japanArrivalDate == null ? "" : japanArrivalDate.trim();
+        String company = affiliationCompany == null ? "" : affiliationCompany.trim();
         if (excludeId == null) {
             Long count = jdbc.queryForObject(
                     """
@@ -608,12 +610,13 @@ public class EmployeeRepository {
                     FROM employee e
                     LEFT JOIN employee_personal p ON p.employee_id = e.id
                     WHERE e.name = ?
+                      AND COALESCE(TRIM(e.affiliation_company), '') = ?
                       AND COALESCE(TRIM(p.gender), '') = ?
                       AND COALESCE(TRIM(p.birth_date), '') = ?
                       AND COALESCE(TRIM(p.japan_arrival_date), '') = ?
                     """,
                     Long.class,
-                    n, g, b, j
+                    n, company, g, b, j
             );
             return count != null && count > 0;
         }
@@ -624,12 +627,13 @@ public class EmployeeRepository {
                 LEFT JOIN employee_personal p ON p.employee_id = e.id
                 WHERE e.id != ?
                   AND e.name = ?
+                  AND COALESCE(TRIM(e.affiliation_company), '') = ?
                   AND COALESCE(TRIM(p.gender), '') = ?
                   AND COALESCE(TRIM(p.birth_date), '') = ?
                   AND COALESCE(TRIM(p.japan_arrival_date), '') = ?
                 """,
                 Long.class,
-                excludeId, n, g, b, j
+                excludeId, n, company, g, b, j
         );
         return count != null && count > 0;
     }

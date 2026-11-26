@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useState } from 'react';
 import { useLocation, useNavigate, useParams } from 'react-router-dom';
-import { ApiError, api } from '../api';
+import { api, isOptimisticLockConflict } from '../api';
 import AppFooter from '../components/AppFooter';
 import DetailTabs from '../components/detail/DetailTabs';
 import FormActionBar from '../components/detail/FormActionBar';
@@ -199,8 +199,7 @@ export default function EmployeeFormPage({ mode }) {
         });
       }
     } catch (e) {
-      const isConflict = e instanceof ApiError && e.status === 409;
-      if (isConflict && isEdit) {
+      if (isOptimisticLockConflict(e) && isEdit) {
         // 楽観ロック衝突: 入力内容は残し、最新 version だけ取り直して再保存可能にする
         try {
           const detail = await api.getEmployeeDetail(id);
