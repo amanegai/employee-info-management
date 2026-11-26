@@ -3,17 +3,28 @@ package jp.dispatch.employee.config;
 import jp.dispatch.employee.auth.AuthRoles;
 import jp.dispatch.employee.model.AffiliationCompanies;
 import jp.dispatch.employee.repository.AuthUserRepository;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.springframework.boot.ApplicationArguments;
 import org.springframework.boot.ApplicationRunner;
+import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.core.annotation.Order;
+import org.springframework.dao.DuplicateKeyException;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Component;
 
 import java.util.List;
 
+/**
+ * 開発・検証用の部門スコープアカウント。
+ * 本番では {@code app.auth.seed-demo-users=true} のときのみ有効。
+ */
 @Component
 @Order(2)
+@ConditionalOnProperty(name = "app.auth.seed-demo-users", havingValue = "true")
 public class AuthScopeUserInitializer implements ApplicationRunner {
+
+    private static final Logger log = LoggerFactory.getLogger(AuthScopeUserInitializer.class);
 
     private final AuthUserRepository authUserRepository;
     private final PasswordEncoder passwordEncoder;
@@ -58,15 +69,19 @@ public class AuthScopeUserInitializer implements ApplicationRunner {
         if (authUserRepository.existsByUsername(username)) {
             return;
         }
-        authUserRepository.createUser(
-                username,
-                passwordEncoder.encode(rawPassword),
-                displayName,
-                null,
-                departmentId,
-                AffiliationCompanies.BITCROSS,
-                null,
-                roles
-        );
+        try {
+            authUserRepository.createUser(
+                    username,
+                    passwordEncoder.encode(rawPassword),
+                    displayName,
+                    null,
+                    departmentId,
+                    AffiliationCompanies.BITCROSS,
+                    null,
+                    roles
+            );
+        } catch (DuplicateKeyException ex) {
+            log.warn("デモユーザー '{}' の作成をスキップしました: {}", username, ex.getMostSpecificCause().getMessage());
+        }
     }
 }
