@@ -85,6 +85,8 @@ services:
       SPRING_DATASOURCE_PASSWORD: ${DB_PASSWORD}
 
       APP_FILES_STORAGE_DIR: /app/data/files
+      # 本番では開発用デモユーザーを自動作成しない
+      APP_AUTH_SEED_DEMO_USERS: "false"
 
     volumes:
 
